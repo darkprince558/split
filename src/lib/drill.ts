@@ -1,0 +1,362 @@
+export const DIRECTIONS = ["left", "right", "back"] as const;
+
+export type Direction = (typeof DIRECTIONS)[number];
+
+export type Mode = "unlimited" | "timer" | "reps";
+
+export type TimerChoice = 30 | 60 | 120 | 300 | "custom";
+
+export type RepsChoice = 20 | 50 | 100 | 200 | "custom";
+
+export type Settings = {
+  difficulty: number;
+  mode: Mode;
+  timerChoice: TimerChoice;
+  timerCustomSeconds: number;
+  repsChoice: RepsChoice;
+  repsCustom: number;
+  gapMin: number;
+  gapMax: number;
+  holdMs: number;
+  fakeoutChance: number;
+  fakeoutMs: number;
+  directions: Direction[];
+  sound: boolean;
+  respond: boolean;
+};
+
+export type Feel = {
+  gapMin: number;
+  gapMax: number;
+  holdMs: number;
+  fakeoutChance: number;
+  fakeoutMs: number;
+  burstChance: number;
+};
+
+export const PRESETS = [
+  { id: "warmup", label: "Warm-up", level: 2 },
+  { id: "club", label: "Club", level: 5 },
+  { id: "match", label: "Match", level: 8 },
+] as const;
+
+export type PresetId = (typeof PRESETS)[number]["id"] | "custom";
+
+const DIFFICULTY_LINES = [
+  "Slow cues, almost no feints",
+  "Slow cues, rare feints",
+  "Easy pace, a few feints",
+  "Steady pace, light feints",
+  "Club pace, occasional feints",
+  "Quicker gaps, regular feints",
+  "Match pace, frequent feints",
+  "Tight gaps, frequent feints",
+  "Fast bursts, lots of feints",
+  "Full speed, feints in the rush",
+] as const;
+
+export type BlockCode =
+  | "directions"
+  | "reps"
+  | "timer"
+  | "gap"
+  | "hold"
+  | "fakeout"
+  | "fakeout-ms";
+
+export type StartBlock = {
+  code: BlockCode;
+  message: string;
+};
+
+export type CuePlan = {
+  real: Direction;
+  fake: Direction | null;
+};
+
+export type GapPlan = {
+  gapMs: number;
+  burstLeft: number;
+};
+
+export type Summary = {
+  reps: number;
+  respond: boolean;
+  averageMs: number | null;
+  bestMs: number | null;
+  misses: number;
+  feints: number;
+  stoppedEarly: boolean;
+};
+
+export type Rng = () => number;
+
+function lerp(start: number, end: number, t: number) {
+  return start + (end - start) * t;
+}
+
+export function clampDifficulty(level: number) {
+  return Math.min(10, Math.max(1, Math.round(level)));
+}
+
+export function feelForLevel(level: number): Feel {
+  const t = (clampDifficulty(level) - 1) / 9;
+  return {
+    gapMin: Math.round(lerp(1800, 220, t)),
+    gapMax: Math.round(lerp(3400, 900, t)),
+    holdMs: Math.round(lerp(1400, 450, t)),
+    fakeoutChance: Math.round(lerp(5, 55, t)),
+    fakeoutMs: Math.round(lerp(300, 70, t)),
+    burstChance: lerp(0, 0.48, t),
+  };
+}
+
+export function describeDifficulty(level: number) {
+  return DIFFICULTY_LINES[clampDifficulty(level) - 1];
+}
+
+export function presetForLevel(level: number): PresetId {
+  const match = PRESETS.find((preset) => preset.level === clampDifficulty(level));
+  return match ? match.id : "custom";
+}
+
+export function applyDifficulty(settings: Settings, level: number): Settings {
+  const feel = feelForLevel(level);
+  return {
+    ...settings,
+    difficulty: clampDifficulty(level),
+    gapMin: feel.gapMin,
+    gapMax: feel.gapMax,
+    holdMs: feel.holdMs,
+    fakeoutChance: feel.fakeoutChance,
+    fakeoutMs: feel.fakeoutMs,
+  };
+}
+
+export function createDefaultSettings(): Settings {
+  return applyDifficulty(
+    {
+      difficulty: 5,
+      mode: "reps",
+      timerChoice: 60,
+      timerCustomSeconds: 90,
+      repsChoice: 20,
+      repsCustom: 30,
+      gapMin: 1,
+      gapMax: 1,
+      holdMs: 1,
+      fakeoutChance: 0,
+      fakeoutMs: 1,
+      directions: ["left", "right", "back"],
+      sound: true,
+      respond: true,
+    },
+    5,
+  );
+}
+
+export function resolvedTimerSeconds(settings: Settings) {
+  return settings.timerChoice === "custom"
+    ? settings.timerCustomSeconds
+    : settings.timerChoice;
+}
+
+export function resolvedReps(settings: Settings) {
+  return settings.repsChoice === "custom" ? settings.repsCustom : settings.repsChoice;
+}
+
+export function burstChanceFor(settings: Settings) {
+  return feelForLevel(settings.difficulty).burstChance;
+}
+
+export function startBlockReason(settings: Settings): StartBlock | null {
+  if (settings.directions.length === 0) {
+    return { code: "directions", message: "Pick at least one direction." };
+  }
+
+  if (settings.mode === "reps") {
+    const reps = resolvedReps(settings);
+    if (!Number.isInteger(reps) || reps < 1) {
+      return { code: "reps", message: "Reps must be at least 1." };
+    }
+  }
+
+  if (settings.mode === "timer") {
+    const seconds = resolvedTimerSeconds(settings);
+    if (!Number.isInteger(seconds) || seconds < 1) {
+      return { code: "timer", message: "Time must be at least 1 second." };
+    }
+  }
+
+  if (!Number.isFinite(settings.gapMin) || settings.gapMin < 40) {
+    return { code: "gap", message: "Minimum gap must be at least 40 ms." };
+  }
+
+  if (!Number.isFinite(settings.gapMax) || settings.gapMax < settings.gapMin) {
+    return {
+      code: "gap",
+      message: "Minimum gap can't be longer than the maximum.",
+    };
+  }
+
+  if (!Number.isFinite(settings.holdMs) || settings.holdMs < 50) {
+    return { code: "hold", message: "The real arrow needs at least 50 ms." };
+  }
+
+  if (
+    !Number.isFinite(settings.fakeoutChance) ||
+    settings.fakeoutChance < 0 ||
+    settings.fakeoutChance > 100
+  ) {
+    return { code: "fakeout", message: "Fakeout chance stays between 0 and 100." };
+  }
+
+  if (
+    settings.fakeoutChance > 0 &&
+    (!Number.isFinite(settings.fakeoutMs) || settings.fakeoutMs < 30)
+  ) {
+    return { code: "fakeout-ms", message: "Fakeout flash needs at least 30 ms." };
+  }
+
+  return null;
+}
+
+export function directionFromKey(key: string): Direction | null {
+  switch (key) {
+    case "ArrowLeft":
+    case "a":
+    case "A":
+      return "left";
+    case "ArrowRight":
+    case "d":
+    case "D":
+      return "right";
+    case "ArrowUp":
+    case "w":
+    case "W":
+      return "back";
+    default:
+      return null;
+  }
+}
+
+export function directionLabel(direction: Direction) {
+  if (direction === "back") return "Back";
+  if (direction === "left") return "Left";
+  return "Right";
+}
+
+export function planCue(
+  directions: Direction[],
+  fakeoutChance: number,
+  rng: Rng,
+): CuePlan {
+  const pool = directions.length > 0 ? directions : DIRECTIONS;
+  const real = pool[Math.floor(rng() * pool.length)] ?? "left";
+  const others = pool.filter((direction) => direction !== real);
+  if (others.length === 0 || rng() * 100 >= fakeoutChance) {
+    return { real, fake: null };
+  }
+  const fake = others[Math.floor(rng() * others.length)] ?? null;
+  if (!fake || fake === real) return { real, fake: null };
+  return { real, fake };
+}
+
+export function planGap(input: {
+  gapMin: number;
+  gapMax: number;
+  burstChance: number;
+  burstLeft: number;
+  rng: Rng;
+}): GapPlan {
+  if (input.burstLeft > 0) {
+    const loose = 70 + input.rng() * 110;
+    const gapMs = Math.max(40, Math.round(Math.min(loose, input.gapMin)));
+    return { gapMs, burstLeft: input.burstLeft - 1 };
+  }
+
+  const span = Math.max(0, input.gapMax - input.gapMin);
+  const gapMs = Math.max(40, Math.round(input.gapMin + input.rng() * span));
+  if (input.rng() >= input.burstChance) {
+    return { gapMs, burstLeft: 0 };
+  }
+
+  const roll = input.rng();
+  const length = roll < 0.34 ? 2 : roll < 0.67 ? 3 : 4;
+  return { gapMs, burstLeft: length - 1 };
+}
+
+export function scoreLiveAnswer(input: {
+  pressed: Direction;
+  real: Direction;
+  fake: Direction | null;
+  fellDuringFake: boolean;
+  rt: number;
+}) {
+  const correct = input.pressed === input.real;
+  const matchedFake = input.fake !== null && input.pressed === input.fake;
+  return {
+    hit: correct ? Math.max(0, Math.round(input.rt)) : null,
+    miss: !correct,
+    feint: input.fellDuringFake || matchedFake,
+  };
+}
+
+export function scoreTimeout(fellDuringFake: boolean, respond: boolean) {
+  if (!respond) return { miss: false, feint: false };
+  return { miss: true, feint: fellDuringFake };
+}
+
+export function summarize(input: {
+  hits: number[];
+  misses: number;
+  feints: number;
+  reps: number;
+  respond: boolean;
+  stoppedEarly: boolean;
+}): Summary {
+  if (input.hits.length === 0) {
+    return {
+      reps: input.reps,
+      respond: input.respond,
+      averageMs: null,
+      bestMs: null,
+      misses: input.misses,
+      feints: input.feints,
+      stoppedEarly: input.stoppedEarly,
+    };
+  }
+
+  const total = input.hits.reduce((sum, hit) => sum + hit, 0);
+  return {
+    reps: input.reps,
+    respond: input.respond,
+    averageMs: Math.round(total / input.hits.length),
+    bestMs: Math.round(Math.min(...input.hits)),
+    misses: input.misses,
+    feints: input.feints,
+    stoppedEarly: input.stoppedEarly,
+  };
+}
+
+export function formatClock(seconds: number, mode: "up" | "down") {
+  const safe = Math.max(0, seconds);
+  const whole = mode === "down" ? Math.ceil(safe - 1e-9) : Math.floor(safe);
+  const minutes = Math.floor(whole / 60);
+  const remainder = whole % 60;
+  return `${minutes}:${remainder.toString().padStart(2, "0")}`;
+}
+
+export function progressLabel(input: {
+  mode: Mode;
+  reps: number;
+  repTarget: number;
+  elapsedSeconds: number;
+  timerSeconds: number;
+}) {
+  if (input.mode === "reps") return `${input.reps}/${input.repTarget}`;
+  if (input.mode === "timer") {
+    return formatClock(input.timerSeconds - input.elapsedSeconds, "down");
+  }
+  return formatClock(input.elapsedSeconds, "up");
+}
