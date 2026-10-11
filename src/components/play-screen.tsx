@@ -4,7 +4,9 @@ import { useEffect } from "react";
 import { CueArrow } from "@/components/cue-arrow";
 import { Button } from "@/components/ui/button";
 import { useDrillSession } from "@/hooks/use-drill-session";
-import { directionLabel, type Settings, type Summary } from "@/lib/drill";
+import { directionLabel, type Direction, type Settings, type Summary } from "@/lib/drill";
+
+const TAP_ORDER: Direction[] = ["left", "back", "right"];
 
 export function PlayScreen({
   settings,
@@ -77,7 +79,8 @@ export function PlayScreen({
             gridTemplateColumns: `repeat(${Math.max(settings.directions.length, 1)}, minmax(0, 1fr))`,
           }}
         >
-          {settings.directions.map((direction, index) => (
+          {TAP_ORDER.filter((direction) => settings.directions.includes(direction)).map(
+            (direction, index) => (
             <Button
               key={direction}
               type="button"

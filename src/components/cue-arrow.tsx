@@ -21,8 +21,8 @@ export function CueArrow({
         viewBox="0 0 160 160"
         className={
           direction === "back"
-            ? "h-auto w-[min(68vw,42dvh)]"
-            : "h-auto w-[min(84vw,68dvh)]"
+            ? "h-auto w-[min(78vw,56dvh)]"
+            : "h-auto w-[min(88vw,74dvh)]"
         }
       >
         <polygon
@@ -32,7 +32,7 @@ export function CueArrow({
         />
       </svg>
       {direction === "back" ? (
-        <p className="text-[min(18vw,12dvh)] leading-none font-semibold tracking-tight text-black">
+        <p className="text-[min(22vw,16dvh)] leading-none font-semibold tracking-tight text-black">
           BACK
         </p>
       ) : null}
