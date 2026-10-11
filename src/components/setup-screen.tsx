@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import {
   DIRECTIONS,
   PRESETS,
+  SWATCHES,
   applyDifficulty,
   describeDifficulty,
   directionLabel,
@@ -27,6 +28,7 @@ import {
   type Mode,
   type RepsChoice,
   type Settings,
+  type SwatchId,
   type TimerChoice,
 } from "@/lib/drill";
 
@@ -52,28 +54,78 @@ const REPS_CHOICES: { id: RepsChoice; label: string }[] = [
   { id: "custom", label: "Custom" },
 ];
 
+const DIRECTION_TOGGLES: Direction[] = [
+  "left",
+  "right",
+  "back",
+  "forward",
+  "back-left",
+  "back-right",
+  "forward-left",
+  "forward-right",
+];
+
 function ChoiceButton({
   pressed,
   children,
   onClick,
+  className,
+  label,
 }: {
   pressed: boolean;
-  children: string;
+  children: ReactNode;
   onClick: () => void;
+  className?: string;
+  label?: string;
 }) {
   return (
     <Button
       type="button"
       variant="outline"
       aria-pressed={pressed}
+      aria-label={label}
       onClick={onClick}
       className={cn(
         "h-11 text-base",
         pressed && "border-[#FF3B00] text-[#FF3B00]",
+        className,
       )}
     >
       {children}
     </Button>
+  );
+}
+
+function SwatchRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: SwatchId;
+  onChange: (value: SwatchId) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Label className="text-base">{label}</Label>
+      <div className="grid grid-cols-3 gap-2">
+        {SWATCHES.map((swatch) => (
+          <ChoiceButton
+            key={swatch.id}
+            pressed={value === swatch.id}
+            label={`${label} ${swatch.label}`}
+            onClick={() => onChange(swatch.id)}
+            className="h-14 flex-col gap-1 text-xs"
+          >
+            <span
+              className="size-5 rounded-sm border border-black/20"
+              style={{ backgroundColor: swatch.hex }}
+            />
+            {swatch.label}
+          </ChoiceButton>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -243,6 +295,19 @@ export function SetupScreen({
           <p className="text-sm text-neutral-600">{mode.hint}</p>
         </section>
 
+        <section className="flex flex-col gap-4">
+          <SwatchRow
+            label="Arrow"
+            value={settings.arrowColor}
+            onChange={(arrowColor) => onChange({ ...settings, arrowColor })}
+          />
+          <SwatchRow
+            label="Background"
+            value={settings.backgroundColor}
+            onChange={(backgroundColor) => onChange({ ...settings, backgroundColor })}
+          />
+        </section>
+
         <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
           <CollapsibleTrigger className="flex w-full items-center justify-between py-1 text-left text-base">
             Settings
@@ -346,12 +411,13 @@ export function SetupScreen({
             </p>
             <div className="flex flex-col gap-2">
               <Label>Directions</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {DIRECTIONS.map((direction) => (
+              <div className="grid grid-cols-2 gap-2">
+                {DIRECTION_TOGGLES.map((direction) => (
                   <ChoiceButton
                     key={direction}
                     pressed={settings.directions.includes(direction)}
                     onClick={() => toggleDirection(direction)}
+                    className="h-auto min-h-11 whitespace-normal px-2 text-center leading-tight"
                   >
                     {directionLabel(direction)}
                   </ChoiceButton>
@@ -375,7 +441,7 @@ export function SetupScreen({
               <span>
                 <span className="block text-base">Respond with keys or taps</span>
                 <span className="block text-sm text-neutral-600">
-                  Arrows or A, D, W. Wrong key is a miss.
+                  Q W E, A S D, Z C, and the arrow keys. Wrong key is a miss.
                 </span>
               </span>
               <Switch

@@ -4,9 +4,20 @@ import { useEffect } from "react";
 import { CueArrow } from "@/components/cue-arrow";
 import { Button } from "@/components/ui/button";
 import { useDrillSession } from "@/hooks/use-drill-session";
-import { directionLabel, type Direction, type Settings, type Summary } from "@/lib/drill";
+import {
+  directionLabel,
+  inkForBackground,
+  swatchHex,
+  type Direction,
+  type Settings,
+  type Summary,
+} from "@/lib/drill";
 
-const TAP_ORDER: Direction[] = ["left", "back", "right"];
+const PAD: (Direction | null)[][] = [
+  ["back-left", "back", "back-right"],
+  ["left", null, "right"],
+  ["forward-left", "forward", "forward-right"],
+];
 
 export function PlayScreen({
   settings,
@@ -16,6 +27,10 @@ export function PlayScreen({
   onFinish: (summary: Summary) => void;
 }) {
   const { view, answer, togglePause, stop } = useDrillSession(settings, onFinish);
+  const background = swatchHex(settings.backgroundColor);
+  const arrow = swatchHex(settings.arrowColor);
+  const ink = inkForBackground(settings.backgroundColor);
+  const line = `color-mix(in srgb, ${ink} 28%, transparent)`;
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -27,18 +42,22 @@ export function PlayScreen({
 
   return (
     <div
-      className="fixed inset-0 overflow-hidden bg-white text-black select-none"
+      className="fixed inset-0 flex flex-col overflow-hidden select-none"
+      style={{ backgroundColor: background, color: ink }}
       data-screen="play"
       data-phase={view.paused ? "paused" : view.phase}
       data-direction={view.shown ?? ""}
+      data-arrow-color={settings.arrowColor}
+      data-background-color={settings.backgroundColor}
       onContextMenu={(event) => event.preventDefault()}
     >
-      <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <header className="z-10 flex shrink-0 items-center justify-between px-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <div className="flex items-center">
           <Button
             type="button"
             variant="ghost"
-            className="h-11 px-3 text-base text-black"
+            className="h-11 bg-transparent px-3 text-base hover:bg-transparent"
+            style={{ color: ink }}
             onClick={stop}
           >
             Stop
@@ -46,65 +65,64 @@ export function PlayScreen({
           <Button
             type="button"
             variant="ghost"
-            className="h-11 px-3 text-base text-black"
+            className="h-11 bg-transparent px-3 text-base hover:bg-transparent"
+            style={{ color: ink }}
             onClick={togglePause}
           >
             {view.paused ? "Resume" : "Pause"}
           </Button>
         </div>
-        <p className="px-3 text-sm tabular-nums text-neutral-500">{view.progress}</p>
+        <p className="px-3 text-sm tabular-nums opacity-70">{view.progress}</p>
       </header>
       <p className="sr-only" aria-live="polite">
         {view.phase === "live" && view.shown && !view.paused ? directionLabel(view.shown) : ""}
       </p>
 
-      <div
-        className={
-          settings.respond
-            ? "absolute inset-x-0 top-14 bottom-24 flex items-center justify-center"
-            : "absolute inset-0 flex items-center justify-center"
-        }
-      >
+      <div className="flex min-h-0 flex-1 items-center justify-center">
         {view.paused ? (
           <p className="text-2xl">Paused</p>
         ) : view.shown ? (
-          <CueArrow direction={view.shown} announce={view.phase === "live"} />
+          <CueArrow direction={view.shown} announce={view.phase === "live"} color={arrow} />
         ) : null}
       </div>
 
       {settings.respond ? (
         <div
-          className="absolute inset-x-0 bottom-0 grid border-t border-black/10 pb-[env(safe-area-inset-bottom)]"
-          style={{
-            gridTemplateColumns: `repeat(${Math.max(settings.directions.length, 1)}, minmax(0, 1fr))`,
-          }}
+          className="grid shrink-0 grid-cols-3 border-t pb-[env(safe-area-inset-bottom)]"
+          style={{ borderColor: line }}
         >
-          {TAP_ORDER.filter((direction) => settings.directions.includes(direction)).map(
-            (direction, index) => (
-            <Button
-              key={direction}
-              type="button"
-              variant="ghost"
-              disabled={view.paused}
-              className={
-                index === 0
-                  ? "h-20 rounded-none text-lg font-medium text-black active:text-[#FF3B00]"
-                  : "h-20 rounded-none border-l border-black/10 text-lg font-medium text-black active:text-[#FF3B00]"
-              }
-              onPointerDown={(event) => {
-                if (event.button !== 0) return;
-                event.preventDefault();
-                answer(direction);
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter" && event.key !== " ") return;
-                event.preventDefault();
-                answer(direction);
-              }}
-            >
-              {directionLabel(direction)}
-            </Button>
-          ))}
+          {PAD.flat().map((direction, index) => {
+            const enabled = direction !== null && settings.directions.includes(direction);
+            return (
+              <div
+                key={direction ?? `gap-${index}`}
+                className={index % 3 === 0 ? "min-h-16" : "min-h-16 border-l"}
+                style={{ borderColor: line }}
+              >
+                {enabled ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={view.paused}
+                    className="h-16 w-full rounded-none bg-transparent px-1 text-sm leading-tight font-medium whitespace-normal hover:bg-transparent active:opacity-60"
+                    style={{ color: ink }}
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) return;
+                      event.preventDefault();
+                      answer(direction);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      answer(direction);
+                    }}
+                  >
+                    {directionLabel(direction)}
+                  </Button>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </div>

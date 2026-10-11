@@ -1,6 +1,28 @@
-export const DIRECTIONS = ["left", "right", "back"] as const;
+export const DIRECTIONS = [
+  "left",
+  "right",
+  "back",
+  "back-left",
+  "back-right",
+  "forward",
+  "forward-left",
+  "forward-right",
+] as const;
 
 export type Direction = (typeof DIRECTIONS)[number];
+
+export const SWATCHES = [
+  { id: "black", label: "Black", hex: "#000000" },
+  { id: "white", label: "White", hex: "#FFFFFF" },
+  { id: "orange", label: "Orange", hex: "#FF3B00" },
+  { id: "blue", label: "Blue", hex: "#0057FF" },
+  { id: "green", label: "Green", hex: "#128A2E" },
+  { id: "yellow", label: "Yellow", hex: "#FFD400" },
+] as const;
+
+export type SwatchId = (typeof SWATCHES)[number]["id"];
+
+const MIN_CONTRAST = 3;
 
 export type Mode = "unlimited" | "timer" | "reps";
 
@@ -21,6 +43,8 @@ export type Settings = {
   fakeoutChance: number;
   fakeoutMs: number;
   directions: Direction[];
+  arrowColor: SwatchId;
+  backgroundColor: SwatchId;
   sound: boolean;
   respond: boolean;
 };
@@ -62,7 +86,8 @@ export type BlockCode =
   | "gap"
   | "hold"
   | "fakeout"
-  | "fakeout-ms";
+  | "fakeout-ms"
+  | "contrast";
 
 export type StartBlock = {
   code: BlockCode;
@@ -147,7 +172,9 @@ export function createDefaultSettings(): Settings {
       holdMs: 1,
       fakeoutChance: 0,
       fakeoutMs: 1,
-      directions: ["left", "right", "back"],
+      directions: [...DIRECTIONS],
+      arrowColor: "black",
+      backgroundColor: "white",
       sound: true,
       respond: true,
     },
@@ -218,7 +245,47 @@ export function startBlockReason(settings: Settings): StartBlock | null {
     return { code: "fakeout-ms", message: "Fakeout flash needs at least 30 ms." };
   }
 
+  if (!colorsAreReadable(settings.arrowColor, settings.backgroundColor)) {
+    return {
+      code: "contrast",
+      message: "That arrow is too close to the background.",
+    };
+  }
+
   return null;
+}
+
+export function swatchHex(id: SwatchId) {
+  return SWATCHES.find((swatch) => swatch.id === id)?.hex ?? "#000000";
+}
+
+function linearChannel(value: number) {
+  const channel = value / 255;
+  return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+}
+
+export function contrastRatio(foreground: string, background: string) {
+  const luminance = (hex: string) => {
+    const normalized = hex.replace("#", "");
+    const red = linearChannel(parseInt(normalized.slice(0, 2), 16));
+    const green = linearChannel(parseInt(normalized.slice(2, 4), 16));
+    const blue = linearChannel(parseInt(normalized.slice(4, 6), 16));
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+  };
+  const lighter = Math.max(luminance(foreground), luminance(background));
+  const darker = Math.min(luminance(foreground), luminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+export function colorsAreReadable(arrow: SwatchId, background: SwatchId) {
+  return contrastRatio(swatchHex(arrow), swatchHex(background)) >= MIN_CONTRAST;
+}
+
+export function inkForBackground(background: SwatchId) {
+  const hex = swatchHex(background);
+  const black = contrastRatio("#000000", hex);
+  const white = contrastRatio("#ffffff", hex);
+  return black >= white ? "#000000" : "#ffffff";
 }
 
 export function directionFromKey(key: string): Direction | null {
@@ -235,15 +302,87 @@ export function directionFromKey(key: string): Direction | null {
     case "w":
     case "W":
       return "back";
+    case "q":
+    case "Q":
+      return "back-left";
+    case "e":
+    case "E":
+      return "back-right";
+    case "ArrowDown":
+    case "s":
+    case "S":
+      return "forward";
+    case "z":
+    case "Z":
+      return "forward-left";
+    case "c":
+    case "C":
+      return "forward-right";
     default:
       return null;
   }
 }
 
 export function directionLabel(direction: Direction) {
-  if (direction === "back") return "Back";
-  if (direction === "left") return "Left";
-  return "Right";
+  switch (direction) {
+    case "left":
+      return "Left";
+    case "right":
+      return "Right";
+    case "back":
+      return "Back";
+    case "back-left":
+      return "Back left";
+    case "back-right":
+      return "Back right";
+    case "forward":
+      return "Forward";
+    case "forward-left":
+      return "Forward left";
+    case "forward-right":
+      return "Forward right";
+  }
+}
+
+export function directionCueWord(direction: Direction) {
+  switch (direction) {
+    case "left":
+    case "right":
+      return null;
+    case "back":
+      return "BACK";
+    case "back-left":
+      return "BACK LEFT";
+    case "back-right":
+      return "BACK RIGHT";
+    case "forward":
+      return "FORWARD";
+    case "forward-left":
+      return "FORWARD LEFT";
+    case "forward-right":
+      return "FORWARD RIGHT";
+  }
+}
+
+export function directionRotation(direction: Direction) {
+  switch (direction) {
+    case "right":
+      return 0;
+    case "forward-right":
+      return 45;
+    case "forward":
+      return 90;
+    case "forward-left":
+      return 135;
+    case "left":
+      return 180;
+    case "back-left":
+      return -135;
+    case "back":
+      return -90;
+    case "back-right":
+      return -45;
+  }
 }
 
 export function planCue(

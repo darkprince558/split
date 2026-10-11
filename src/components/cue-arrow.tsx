@@ -1,39 +1,51 @@
-import { directionLabel, type Direction } from "@/lib/drill";
+import {
+  directionCueWord,
+  directionLabel,
+  directionRotation,
+  type Direction,
+} from "@/lib/drill";
 
 export function CueArrow({
   direction,
   announce,
+  color,
 }: {
   direction: Direction;
   announce: boolean;
+  color: string;
 }) {
-  const rotation = direction === "left" ? 180 : direction === "back" ? -90 : 0;
+  const word = directionCueWord(direction);
+  const rotation = directionRotation(direction);
 
   return (
     <div
-      className="flex flex-col items-center justify-center gap-[1.5vmin]"
+      className="flex h-full max-h-full w-full flex-col items-center justify-center gap-[1vmin] px-3"
       role={announce ? "img" : undefined}
       aria-label={announce ? directionLabel(direction) : undefined}
       aria-hidden={announce ? undefined : true}
       data-direction={direction}
     >
       <svg
-        viewBox="0 0 160 160"
+        viewBox="-18 -18 196 196"
         className={
-          direction === "back"
-            ? "h-auto w-[min(78vw,56dvh)]"
-            : "h-auto w-[min(88vw,74dvh)]"
+          word
+            ? "h-auto w-[min(78vw,50dvh)]"
+            : "h-auto w-[min(86vw,64dvh)]"
         }
       >
         <polygon
           points="8,68 90,68 90,40 152,80 90,120 90,92 8,92"
-          fill="#000000"
+          fill={color}
           transform={`rotate(${rotation} 80 80)`}
         />
       </svg>
-      {direction === "back" ? (
-        <p className="text-[min(22vw,16dvh)] leading-none font-semibold tracking-tight text-black">
-          BACK
+      {word ? (
+        <p
+          data-cue-word={word}
+          className="max-w-full text-center leading-[0.9] font-semibold tracking-tight text-[clamp(2.5rem,12vw,7rem)]"
+          style={{ color }}
+        >
+          {word}
         </p>
       ) : null}
     </div>

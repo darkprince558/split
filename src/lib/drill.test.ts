@@ -5,6 +5,8 @@ import {
   burstChanceFor,
   createDefaultSettings,
   describeDifficulty,
+  colorsAreReadable,
+  directionCueWord,
   directionFromKey,
   feelForLevel,
   planCue,
@@ -51,7 +53,9 @@ describe("difficulty", () => {
     assert.equal(next.difficulty, 8);
     assert.equal(next.mode, "reps");
     assert.equal(next.repsChoice, 20);
-    assert.deepEqual(next.directions, ["left", "right", "back"]);
+    assert.equal(next.directions.length, 8);
+    assert.equal(next.arrowColor, "black");
+    assert.equal(next.backgroundColor, "white");
     assert.equal(next.gapMin, feelForLevel(8).gapMin);
     assert.ok(burstChanceFor(next) > 0.3);
   });
@@ -82,6 +86,18 @@ describe("start blocking", () => {
       startBlockReason({ ...settings, gapMin: 900, gapMax: 400 })?.message ?? "",
       /longer than the maximum/,
     );
+    assert.equal(
+      startBlockReason({ ...settings, arrowColor: "yellow", backgroundColor: "white" })
+        ?.message,
+      "That arrow is too close to the background.",
+    );
+    assert.equal(
+      startBlockReason({ ...settings, arrowColor: "white", backgroundColor: "white" })
+        ?.code,
+      "contrast",
+    );
+    assert.equal(colorsAreReadable("orange", "white"), true);
+    assert.equal(colorsAreReadable("black", "yellow"), true);
   });
 });
 
@@ -153,7 +169,16 @@ describe("scoring", () => {
   it("maps keys and leaves an empty average when every cue was missed", () => {
     assert.equal(directionFromKey("ArrowLeft"), "left");
     assert.equal(directionFromKey("w"), "back");
-    assert.equal(directionFromKey("ArrowDown"), null);
+    assert.equal(directionFromKey("q"), "back-left");
+    assert.equal(directionFromKey("E"), "back-right");
+    assert.equal(directionFromKey("ArrowDown"), "forward");
+    assert.equal(directionFromKey("s"), "forward");
+    assert.equal(directionFromKey("z"), "forward-left");
+    assert.equal(directionFromKey("c"), "forward-right");
+    assert.equal(directionFromKey("x"), null);
+    assert.equal(directionCueWord("back-left"), "BACK LEFT");
+    assert.equal(directionCueWord("forward"), "FORWARD");
+    assert.equal(directionCueWord("left"), null);
     const summary = summarize({
       hits: [],
       misses: 3,
