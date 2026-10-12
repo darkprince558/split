@@ -16,22 +16,26 @@ export function primeAudio() {
 }
 
 export function playTick() {
-  const audio = getContext();
-  if (!audio) return;
-  if (audio.state === "suspended") {
-    void audio.resume();
-  }
+  try {
+    const audio = getContext();
+    if (!audio) return;
+    if (audio.state === "suspended") {
+      void audio.resume();
+    }
 
-  const start = audio.currentTime;
-  const oscillator = audio.createOscillator();
-  const gain = audio.createGain();
-  oscillator.type = "square";
-  oscillator.frequency.setValueAtTime(1480, start);
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(0.045, start + 0.004);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.04);
-  oscillator.connect(gain);
-  gain.connect(audio.destination);
-  oscillator.start(start);
-  oscillator.stop(start + 0.045);
+    const start = audio.currentTime;
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(1480, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.045, start + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.04);
+    oscillator.connect(gain);
+    gain.connect(audio.destination);
+    oscillator.start(start);
+    oscillator.stop(start + 0.045);
+  } catch {
+    // A blocked audio device should not stop the cues.
+  }
 }

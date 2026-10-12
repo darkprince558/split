@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  activePreset,
   applyDifficulty,
   burstChanceFor,
   createDefaultSettings,
@@ -36,6 +37,9 @@ describe("difficulty", () => {
     assert.ok(hard.holdMs < easy.holdMs);
     assert.ok(hard.fakeoutChance > easy.fakeoutChance);
     assert.ok(hard.fakeoutMs < easy.fakeoutMs);
+    assert.ok(hard.feintCount > easy.feintCount);
+    assert.equal(easy.feintCount, 0);
+    assert.equal(feelForLevel(8).feintCount, 3);
     assert.ok(hard.burstChance > easy.burstChance);
     assert.equal(easy.burstChance, 0);
   });
@@ -57,6 +61,11 @@ describe("difficulty", () => {
     assert.equal(next.arrowColor, "black");
     assert.equal(next.backgroundColor, "white");
     assert.equal(next.gapMin, feelForLevel(8).gapMin);
+    assert.equal(next.feintCount, feelForLevel(8).feintCount);
+    assert.equal(next.respond, false);
+    assert.equal(next.record, true);
+    assert.equal(activePreset(next), "match");
+    assert.equal(activePreset({ ...next, feintCount: 0 }), "custom");
     assert.ok(burstChanceFor(next) > 0.3);
   });
 });
@@ -102,20 +111,47 @@ describe("start blocking", () => {
 });
 
 describe("cues", () => {
-  it("never fakes the real direction", () => {
-    for (let i = 0; i < 200; i += 1) {
-      const cue = planCue(["left", "right", "back"], 100, Math.random);
-      assert.notEqual(cue.fake, cue.real);
-      assert.ok(cue.fake);
+  it("keeps feints off the previous arrow and off the real one at the end", () => {
+    let twos = 0;
+    let threes = 0;
+    for (let i = 0; i < 400; i += 1) {
+      const cue = planCue(
+        ["left", "right", "back", "forward", "back-left", "forward-right"],
+        100,
+        3,
+        Math.random,
+      );
+      assert.ok(cue.feints.length >= 1 && cue.feints.length <= 3);
+      assert.notEqual(cue.feints[cue.feints.length - 1], cue.real);
+      for (let index = 1; index < cue.feints.length; index += 1) {
+        assert.notEqual(cue.feints[index], cue.feints[index - 1]);
+      }
+      if (cue.feints.length === 2) twos += 1;
+      if (cue.feints.length === 3) threes += 1;
     }
+    assert.ok(twos > 0);
+    assert.ok(threes > 0);
+
+    const planned = planCue(
+      ["left", "right", "back", "forward"],
+      100,
+      3,
+      sequence([0, 0, 0.9, 0.3, 0, 0]),
+    );
+    assert.deepEqual(planned, { real: "left", feints: ["right", "left", "right"] });
   });
 
-  it("skips feints when only one direction is on or chance is zero", () => {
-    const single = planCue(["back"], 100, () => 0);
+  it("skips feints when the count is zero, chance is zero, or only one direction is on", () => {
+    const single = planCue(["back"], 100, 3, () => 0);
     assert.equal(single.real, "back");
-    assert.equal(single.fake, null);
-    const none = planCue(["left", "right"], 0, () => 0);
-    assert.equal(none.fake, null);
+    assert.deepEqual(single.feints, []);
+    const none = planCue(["left", "right"], 0, 3, () => 0);
+    assert.deepEqual(none.feints, []);
+    const off = planCue(["left", "right"], 100, 0, () => 0);
+    assert.deepEqual(off.feints, []);
+    const one = planCue(["left", "right", "back"], 100, 1, () => 0);
+    assert.equal(one.feints.length, 1);
+    assert.notEqual(one.feints[0], one.real);
   });
 
   it("chains a short gap after a burst starts", () => {
@@ -146,7 +182,7 @@ describe("scoring", () => {
     const early = scoreLiveAnswer({
       pressed: "right",
       real: "right",
-      fake: "left",
+      feints: ["left"],
       fellDuringFake: true,
       rt: 248.4,
     });
@@ -155,7 +191,7 @@ describe("scoring", () => {
     const bitten = scoreLiveAnswer({
       pressed: "left",
       real: "right",
-      fake: "left",
+      feints: ["left"],
       fellDuringFake: false,
       rt: 300,
     });

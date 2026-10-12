@@ -44,10 +44,16 @@ function linesFor(summary: Summary) {
 
 export function SummaryScreen({
   summary,
+  note,
+  canReview,
+  onReview,
   onAgain,
   onSetup,
 }: {
   summary: Summary;
+  note: string | null;
+  canReview: boolean;
+  onReview: () => void;
   onAgain: () => void;
   onSetup: () => void;
 }) {
@@ -65,8 +71,14 @@ export function SummaryScreen({
               <li key={line}>{line}</li>
             ))}
           </ul>
+          {note ? <p className="mt-4 text-base">{note}</p> : null}
         </div>
         <div className="flex flex-col gap-3">
+          {canReview ? (
+            <Button type="button" variant="outline" className="h-14 text-lg" onClick={onReview}>
+              Review clips
+            </Button>
+          ) : null}
           <Button type="button" className="h-14 text-lg font-semibold" onClick={onAgain}>
             Again
           </Button>

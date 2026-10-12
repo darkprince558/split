@@ -42,11 +42,13 @@ export type Settings = {
   holdMs: number;
   fakeoutChance: number;
   fakeoutMs: number;
+  feintCount: number;
   directions: Direction[];
   arrowColor: SwatchId;
   backgroundColor: SwatchId;
   sound: boolean;
   respond: boolean;
+  record: boolean;
 };
 
 export type Feel = {
@@ -55,8 +57,18 @@ export type Feel = {
   holdMs: number;
   fakeoutChance: number;
   fakeoutMs: number;
+  feintCount: number;
   burstChance: number;
 };
+
+export const RANGES = {
+  gapMin: { min: 40, max: 4000 },
+  gapMax: { min: 40, max: 6000 },
+  holdMs: { min: 50, max: 3000 },
+  fakeoutChance: { min: 0, max: 100 },
+  fakeoutMs: { min: 30, max: 800 },
+  feintCount: { min: 0, max: 3 },
+} as const;
 
 export const PRESETS = [
   { id: "warmup", label: "Warm-up", level: 2 },
@@ -96,7 +108,7 @@ export type StartBlock = {
 
 export type CuePlan = {
   real: Direction;
-  fake: Direction | null;
+  feints: Direction[];
 };
 
 export type GapPlan = {
@@ -124,6 +136,14 @@ export function clampDifficulty(level: number) {
   return Math.min(10, Math.max(1, Math.round(level)));
 }
 
+export function feintCountForLevel(level: number) {
+  const clamped = clampDifficulty(level);
+  if (clamped <= 1) return 0;
+  if (clamped <= 4) return 1;
+  if (clamped <= 7) return 2;
+  return 3;
+}
+
 export function feelForLevel(level: number): Feel {
   const t = (clampDifficulty(level) - 1) / 9;
   return {
@@ -132,6 +152,7 @@ export function feelForLevel(level: number): Feel {
     holdMs: Math.round(lerp(1400, 450, t)),
     fakeoutChance: Math.round(lerp(5, 55, t)),
     fakeoutMs: Math.round(lerp(300, 70, t)),
+    feintCount: feintCountForLevel(level),
     burstChance: lerp(0, 0.48, t),
   };
 }
@@ -145,6 +166,29 @@ export function presetForLevel(level: number): PresetId {
   return match ? match.id : "custom";
 }
 
+export function feelMatches(
+  settings: Pick<
+    Settings,
+    "difficulty" | "gapMin" | "gapMax" | "holdMs" | "fakeoutChance" | "fakeoutMs" | "feintCount"
+  >,
+) {
+  const feel = feelForLevel(settings.difficulty);
+  return (
+    settings.gapMin === feel.gapMin &&
+    settings.gapMax === feel.gapMax &&
+    settings.holdMs === feel.holdMs &&
+    settings.fakeoutChance === feel.fakeoutChance &&
+    settings.fakeoutMs === feel.fakeoutMs &&
+    settings.feintCount === feel.feintCount
+  );
+}
+
+export function activePreset(settings: Settings): PresetId {
+  const named = presetForLevel(settings.difficulty);
+  if (named === "custom" || !feelMatches(settings)) return "custom";
+  return named;
+}
+
 export function applyDifficulty(settings: Settings, level: number): Settings {
   const feel = feelForLevel(level);
   return {
@@ -155,6 +199,7 @@ export function applyDifficulty(settings: Settings, level: number): Settings {
     holdMs: feel.holdMs,
     fakeoutChance: feel.fakeoutChance,
     fakeoutMs: feel.fakeoutMs,
+    feintCount: feel.feintCount,
   };
 }
 
@@ -172,11 +217,13 @@ export function createDefaultSettings(): Settings {
       holdMs: 1,
       fakeoutChance: 0,
       fakeoutMs: 1,
+      feintCount: 0,
       directions: [...DIRECTIONS],
       arrowColor: "black",
       backgroundColor: "white",
       sound: true,
-      respond: true,
+      respond: false,
+      record: true,
     },
     5,
   );
@@ -388,17 +435,37 @@ export function directionRotation(direction: Direction) {
 export function planCue(
   directions: Direction[],
   fakeoutChance: number,
+  feintCount: number,
   rng: Rng,
 ): CuePlan {
   const pool = directions.length > 0 ? directions : DIRECTIONS;
   const real = pool[Math.floor(rng() * pool.length)] ?? "left";
-  const others = pool.filter((direction) => direction !== real);
-  if (others.length === 0 || rng() * 100 >= fakeoutChance) {
-    return { real, fake: null };
+  const max = Math.max(0, Math.min(3, Math.floor(feintCount)));
+  if (max === 0 || pool.length < 2 || rng() * 100 >= fakeoutChance) {
+    return { real, feints: [] };
   }
-  const fake = others[Math.floor(rng() * others.length)] ?? null;
-  if (!fake || fake === real) return { real, fake: null };
-  return { real, fake };
+
+  const count = 1 + Math.floor(rng() * max);
+  const feints: Direction[] = [];
+  let previous: Direction | null = null;
+  for (let index = 0; index < count; index += 1) {
+    const last = index === count - 1;
+    const choices = pool.filter((direction) => {
+      if (previous !== null && direction === previous) return false;
+      if (last && direction === real) return false;
+      return true;
+    });
+    if (choices.length === 0) break;
+    const next = choices[Math.floor(rng() * choices.length)];
+    if (!next) break;
+    feints.push(next);
+    previous = next;
+  }
+
+  if (feints.length === 0 || feints[feints.length - 1] === real) {
+    return { real, feints: [] };
+  }
+  return { real, feints };
 }
 
 export function planGap(input: {
@@ -428,12 +495,12 @@ export function planGap(input: {
 export function scoreLiveAnswer(input: {
   pressed: Direction;
   real: Direction;
-  fake: Direction | null;
+  feints: Direction[];
   fellDuringFake: boolean;
   rt: number;
 }) {
   const correct = input.pressed === input.real;
-  const matchedFake = input.fake !== null && input.pressed === input.fake;
+  const matchedFake = !correct && input.feints.includes(input.pressed);
   return {
     hit: correct ? Math.max(0, Math.round(input.rt)) : null,
     miss: !correct,
@@ -498,4 +565,21 @@ export function progressLabel(input: {
     return formatClock(input.timerSeconds - input.elapsedSeconds, "down");
   }
   return formatClock(input.elapsedSeconds, "up");
+}
+
+export function clipFilename(index: number, direction: Direction, feints: Direction[]) {
+  const number = String(Math.max(0, Math.trunc(index))).padStart(2, "0");
+  if (feints.length === 0) return `${number}-${direction}.webm`;
+  return `${number}-${direction}-feints-${feints.join("-")}.webm`;
+}
+
+export function clipsCsv(
+  rows: { filename: string; direction: Direction; feints: Direction[] }[],
+) {
+  const lines = ["clip,real,feints"];
+  for (const row of rows) {
+    const feints = row.feints.map((direction) => directionLabel(direction)).join("; ");
+    lines.push([row.filename, directionLabel(row.direction), feints].join(","));
+  }
+  return `${lines.join("\n")}\n`;
 }

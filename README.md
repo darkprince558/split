@@ -1,8 +1,8 @@
 # Split
 
-A full-screen reaction trainer for badminton split-step reads. The court stays blank, then an arrow calls a direction: left, right, back, the diagonals, or forward toward the net. Gaps are uneven. Some cues flash a feint first. The real arrow is the one that counts.
+A full-screen reaction trainer for badminton split-step reads. A laptop sits on the court. The court stays blank, then an arrow calls a direction: left, right, back, the diagonals, or forward toward the net. Gaps are uneven. A cue can flash up to three feints first. The real arrow is the one that counts.
 
-Answer from a keyboard with Q W E, A S D, Z C, or the arrow keys, or tap the labeled pad along the bottom. Turn responses off and the cues just run. Arrow and background colors are swatches on the setup screen. The drill won't start if the pair is too close to read.
+Cues run on their own. Key and tap answers stay available in Settings, off by default. Record reactions is on by default: the laptop camera saves one clip per cue in this browser, with the real direction and the feints, so you can review the movement later. Nothing is uploaded. Arrow and background colors are inside Settings. The drill won't start if the pair is too close to read.
 
 ## Run it
 

@@ -20,12 +20,19 @@ import {
 
 export type DrillPhase = "gap" | "fake" | "live";
 
+export type PlannedCue = {
+  direction: Direction;
+  feints: Direction[];
+};
+
 export type DrillView = {
   phase: DrillPhase;
   paused: boolean;
   shown: Direction | null;
   progress: string;
   cueId: number;
+  cueReal: Direction | null;
+  cueFeints: Direction[];
 };
 
 const EMPTY_VIEW: DrillView = {
@@ -34,19 +41,27 @@ const EMPTY_VIEW: DrillView = {
   shown: null,
   progress: "",
   cueId: 0,
+  cueReal: null,
+  cueFeints: [],
 };
 
 export function useDrillSession(
   settings: Settings,
   onFinish: (summary: Summary) => void,
+  hooks: {
+    onCueStart: (cue: PlannedCue) => void;
+    onCueEnd: (keep: boolean) => Promise<void> | void;
+  },
 ) {
   const settingsRef = useRef(settings);
   const onFinishRef = useRef(onFinish);
+  const hooksRef = useRef(hooks);
   const [view, setView] = useState<DrillView>(EMPTY_VIEW);
 
   useEffect(() => {
     onFinishRef.current = onFinish;
-  }, [onFinish]);
+    hooksRef.current = hooks;
+  }, [onFinish, hooks]);
 
   const apiRef = useRef<{
     answer: (direction: Direction) => void;
@@ -64,14 +79,17 @@ export function useDrillSession(
     let clock: number | null = null;
     let finished = false;
     let onEnd = () => {};
+    const pendingSaves: Promise<void>[] = [];
 
     const engine = {
       phase: "gap" as DrillPhase,
       paused: false,
       shown: null as Direction | null,
       real: null as Direction | null,
-      fake: null as Direction | null,
+      feintList: [] as Direction[],
       fellDuringFake: false,
+      clipOpen: false,
+      realShown: false,
       cueStartedAt: 0,
       reps: 0,
       hits: [] as number[],
@@ -105,6 +123,8 @@ export function useDrillSession(
         paused: engine.paused,
         shown: engine.paused ? null : engine.shown,
         cueId: engine.cueId,
+        cueReal: engine.real,
+        cueFeints: engine.feintList,
         progress: progressLabel({
           mode: snapshot.mode,
           reps: engine.reps,
@@ -115,26 +135,46 @@ export function useDrillSession(
       });
     };
 
+    const openClip = () => {
+      if (!engine.real || engine.clipOpen) return;
+      engine.clipOpen = true;
+      hooksRef.current.onCueStart({
+        direction: engine.real,
+        feints: engine.feintList,
+      });
+    };
+
+    const closeClip = () => {
+      if (!engine.clipOpen) return;
+      engine.clipOpen = false;
+      const keep = engine.realShown;
+      pendingSaves.push(
+        Promise.resolve(hooksRef.current.onCueEnd(keep)).then(() => undefined),
+      );
+    };
+
     const finish = (stoppedEarly: boolean) => {
       if (finished) return;
       finished = true;
       clearTimer();
       if (clock !== null) window.clearInterval(clock);
-      onFinishRef.current(
-        summarize({
-          hits: engine.hits,
-          misses: engine.misses,
-          feints: engine.feints,
-          reps: engine.reps,
-          respond: snapshot.respond,
-          stoppedEarly,
-        }),
-      );
+      closeClip();
+      const summary = summarize({
+        hits: engine.hits,
+        misses: engine.misses,
+        feints: engine.feints,
+        reps: engine.reps,
+        respond: snapshot.respond,
+        stoppedEarly,
+      });
+      void (async () => {
+        await Promise.all(pendingSaves);
+        onFinishRef.current(summary);
+      })();
     };
 
     const timerExpired = () =>
-      snapshot.mode === "timer" &&
-      elapsedSeconds() >= resolvedTimerSeconds(snapshot);
+      snapshot.mode === "timer" && elapsedSeconds() >= resolvedTimerSeconds(snapshot);
 
     const schedule = (ms: number, fn: () => void) => {
       clearTimer();
@@ -150,18 +190,34 @@ export function useDrillSession(
     };
 
     const showReal = () => {
+      const opening = engine.feintList.length === 0;
+      engine.realShown = true;
       engine.phase = "live";
       engine.shown = engine.real;
       engine.cueStartedAt = performance.now();
-      engine.cueId += 1;
+      if (opening) engine.cueId += 1;
+      openClip();
       publish();
       if (snapshot.sound) playTick();
       schedule(snapshot.holdMs, () => {
         const scored = scoreTimeout(engine.fellDuringFake, snapshot.respond);
         if (scored.miss) engine.misses += 1;
         if (scored.feint) engine.feints += 1;
+        closeClip();
         engine.reps += 1;
         beginGap();
+      });
+    };
+
+    const showFeint = (index: number) => {
+      engine.phase = "fake";
+      engine.shown = engine.feintList[index] ?? null;
+      if (index === 0) engine.cueId += 1;
+      openClip();
+      publish();
+      schedule(snapshot.fakeoutMs, () => {
+        if (index + 1 < engine.feintList.length) showFeint(index + 1);
+        else showReal();
       });
     };
 
@@ -171,16 +227,18 @@ export function useDrillSession(
         finish(false);
         return;
       }
-      const cue = planCue(snapshot.directions, snapshot.fakeoutChance, Math.random);
+      const cue = planCue(
+        snapshot.directions,
+        snapshot.fakeoutChance,
+        snapshot.feintCount,
+        Math.random,
+      );
       engine.real = cue.real;
-      engine.fake = cue.fake;
+      engine.feintList = cue.feints;
       engine.fellDuringFake = false;
-      if (cue.fake) {
-        engine.phase = "fake";
-        engine.shown = cue.fake;
-        engine.cueId += 1;
-        publish();
-        schedule(snapshot.fakeoutMs, showReal);
+      engine.realShown = false;
+      if (cue.feints.length > 0) {
+        showFeint(0);
         return;
       }
       showReal();
@@ -221,13 +279,14 @@ export function useDrillSession(
       const scored = scoreLiveAnswer({
         pressed: direction,
         real: engine.real,
-        fake: engine.fake,
+        feints: engine.feintList,
         fellDuringFake: engine.fellDuringFake,
         rt: performance.now() - engine.cueStartedAt,
       });
       if (scored.hit !== null) engine.hits.push(scored.hit);
       if (scored.miss) engine.misses += 1;
       if (scored.feint) engine.feints += 1;
+      closeClip();
       engine.reps += 1;
       beginGap();
     };

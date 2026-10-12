@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -16,11 +16,12 @@ import { cn } from "@/lib/utils";
 import {
   DIRECTIONS,
   PRESETS,
+  RANGES,
   SWATCHES,
+  activePreset,
   applyDifficulty,
   describeDifficulty,
   directionLabel,
-  presetForLevel,
   resolvedReps,
   resolvedTimerSeconds,
   startBlockReason,
@@ -31,6 +32,7 @@ import {
   type SwatchId,
   type TimerChoice,
 } from "@/lib/drill";
+import { hasAnyClips } from "@/lib/video-storage";
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
   { id: "unlimited", label: "Unlimited", hint: "Keeps going until you hit Stop." },
@@ -96,6 +98,98 @@ function ChoiceButton({
   );
 }
 
+function RangeField({
+  id,
+  label,
+  min,
+  max,
+  value,
+  invalid,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  min: number;
+  max: number;
+  value: number;
+  invalid?: boolean;
+  onChange: (value: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) setText(String(value));
+  }, [value]);
+
+  const commit = (raw: string, blur: boolean) => {
+    const parsed = Number(raw);
+    if (raw.trim() === "" || !Number.isFinite(parsed)) {
+      if (blur) {
+        onChange(min);
+        setText(String(min));
+      }
+      return;
+    }
+    const next = Math.trunc(parsed);
+    if (next > max) {
+      onChange(max);
+      setText(String(max));
+      return;
+    }
+    if (next < min) {
+      if (blur) {
+        onChange(min);
+        setText(String(min));
+      }
+      return;
+    }
+    onChange(next);
+    if (blur) setText(String(next));
+  };
+
+  return (
+    <div className="flex flex-col gap-2" data-range={id}>
+      <Label htmlFor={id}>{label}</Label>
+      <div className="flex items-center gap-3">
+        <Slider
+          className="min-w-0 flex-1"
+          min={min}
+          max={max}
+          step={1}
+          value={[Math.min(max, Math.max(min, value))]}
+          onValueChange={(next) => {
+            const picked = Array.isArray(next) ? next[0] : next;
+            if (typeof picked === "number") onChange(picked);
+          }}
+          aria-label={label}
+        />
+        <Input
+          id={id}
+          type="number"
+          inputMode="numeric"
+          min={min}
+          max={max}
+          value={text}
+          aria-invalid={invalid}
+          className="h-11 w-24 text-base md:text-base"
+          onFocus={() => {
+            focused.current = true;
+          }}
+          onBlur={() => {
+            focused.current = false;
+            commit(text, true);
+          }}
+          onChange={(event) => {
+            setText(event.target.value);
+            commit(event.target.value, false);
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function SwatchRow({
   label,
   value,
@@ -140,15 +234,32 @@ export function SetupScreen({
   settings,
   onChange,
   onStart,
+  onReview,
 }: {
   settings: Settings;
   onChange: (settings: Settings) => void;
   onStart: () => void;
+  onReview: () => void;
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [canReview, setCanReview] = useState(false);
   const block = startBlockReason(settings);
-  const preset = presetForLevel(settings.difficulty);
+  const preset = activePreset(settings);
   const mode = MODES.find((item) => item.id === settings.mode) ?? MODES[2];
+
+  useEffect(() => {
+    let live = true;
+    hasAnyClips()
+      .then((yes) => {
+        if (live) setCanReview(yes);
+      })
+      .catch(() => {
+        if (live) setCanReview(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const toggleDirection = (direction: Direction) => {
     const selected = settings.directions.includes(direction)
@@ -295,16 +406,17 @@ export function SetupScreen({
           <p className="text-sm text-neutral-600">{mode.hint}</p>
         </section>
 
-        <section className="flex flex-col gap-4">
-          <SwatchRow
-            label="Arrow"
-            value={settings.arrowColor}
-            onChange={(arrowColor) => onChange({ ...settings, arrowColor })}
-          />
-          <SwatchRow
-            label="Background"
-            value={settings.backgroundColor}
-            onChange={(backgroundColor) => onChange({ ...settings, backgroundColor })}
+        <section className="flex items-center justify-between gap-4 rounded-lg border border-neutral-200 px-4 py-3">
+          <span>
+            <span className="block text-lg font-medium">Record reactions</span>
+            <span className="block text-sm text-neutral-600">
+              The laptop camera films each cue, including the feints. Nothing is uploaded.
+            </span>
+          </span>
+          <Switch
+            checked={settings.record}
+            onCheckedChange={(checked) => onChange({ ...settings, record: checked })}
+            aria-label="Record reactions"
           />
         </section>
 
@@ -320,95 +432,75 @@ export function SetupScreen({
             <p className="text-sm text-neutral-600">
               Moving the difficulty slider overwrites gap, hold, and fakeout.
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="gap-min">Min gap (ms)</Label>
-                <Input
-                  id="gap-min"
-                  type="number"
-                  inputMode="numeric"
-                  min={40}
-                  value={settings.gapMin}
-                  aria-invalid={block?.code === "gap"}
-                  className="h-11 text-base md:text-base"
-                  onChange={(event) =>
-                    onChange({ ...settings, gapMin: wholeNumber(event.target.value) })
-                  }
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="gap-max">Max gap (ms)</Label>
-                <Input
-                  id="gap-max"
-                  type="number"
-                  inputMode="numeric"
-                  min={40}
-                  value={settings.gapMax}
-                  aria-invalid={block?.code === "gap"}
-                  className="h-11 text-base md:text-base"
-                  onChange={(event) =>
-                    onChange({ ...settings, gapMax: wholeNumber(event.target.value) })
-                  }
-                />
-              </div>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="hold">Real arrow stays (ms)</Label>
-              <Input
+            <div className="flex flex-col gap-5">
+              <RangeField
+                id="gap-min"
+                label="Min gap (ms)"
+                min={RANGES.gapMin.min}
+                max={RANGES.gapMin.max}
+                value={settings.gapMin}
+                invalid={block?.code === "gap"}
+                onChange={(gapMin) => onChange({ ...settings, gapMin })}
+              />
+              <RangeField
+                id="gap-max"
+                label="Max gap (ms)"
+                min={RANGES.gapMax.min}
+                max={RANGES.gapMax.max}
+                value={settings.gapMax}
+                invalid={block?.code === "gap"}
+                onChange={(gapMax) => onChange({ ...settings, gapMax })}
+              />
+              <RangeField
                 id="hold"
-                type="number"
-                inputMode="numeric"
-                min={50}
+                label="Real arrow stays (ms)"
+                min={RANGES.holdMs.min}
+                max={RANGES.holdMs.max}
                 value={settings.holdMs}
-                aria-invalid={block?.code === "hold"}
-                className="h-11 text-base md:text-base"
-                onChange={(event) =>
-                  onChange({ ...settings, holdMs: wholeNumber(event.target.value) })
-                }
+                invalid={block?.code === "hold"}
+                onChange={(holdMs) => onChange({ ...settings, holdMs })}
+              />
+              <RangeField
+                id="fake-chance"
+                label="Fakeout chance (%)"
+                min={RANGES.fakeoutChance.min}
+                max={RANGES.fakeoutChance.max}
+                value={settings.fakeoutChance}
+                invalid={block?.code === "fakeout"}
+                onChange={(fakeoutChance) => onChange({ ...settings, fakeoutChance })}
+              />
+              <RangeField
+                id="fake-ms"
+                label="Fakeout flash (ms)"
+                min={RANGES.fakeoutMs.min}
+                max={RANGES.fakeoutMs.max}
+                value={settings.fakeoutMs}
+                invalid={block?.code === "fakeout-ms"}
+                onChange={(fakeoutMs) => onChange({ ...settings, fakeoutMs })}
+              />
+              <RangeField
+                id="feints"
+                label="Feints"
+                min={RANGES.feintCount.min}
+                max={RANGES.feintCount.max}
+                value={settings.feintCount}
+                onChange={(feintCount) => onChange({ ...settings, feintCount })}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="fake-chance">Fakeout chance (%)</Label>
-                <Input
-                  id="fake-chance"
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={100}
-                  value={settings.fakeoutChance}
-                  aria-invalid={block?.code === "fakeout"}
-                  className="h-11 text-base md:text-base"
-                  onChange={(event) =>
-                    onChange({
-                      ...settings,
-                      fakeoutChance: wholeNumber(event.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="fake-ms">Fakeout flash (ms)</Label>
-                <Input
-                  id="fake-ms"
-                  type="number"
-                  inputMode="numeric"
-                  min={30}
-                  value={settings.fakeoutMs}
-                  aria-invalid={block?.code === "fakeout-ms"}
-                  className="h-11 text-base md:text-base"
-                  onChange={(event) =>
-                    onChange({
-                      ...settings,
-                      fakeoutMs: wholeNumber(event.target.value),
-                    })
-                  }
-                />
-              </div>
-            </div>
             <p className="text-sm text-neutral-600">
-              A feint flashes, then the real arrow. Only the real one counts.
+              0 is no feint. 3 shows one, two, or three fake arrows. The real arrow is the one
+              that counts.
             </p>
+            <SwatchRow
+              label="Arrow"
+              value={settings.arrowColor}
+              onChange={(arrowColor) => onChange({ ...settings, arrowColor })}
+            />
+            <SwatchRow
+              label="Background"
+              value={settings.backgroundColor}
+              onChange={(backgroundColor) => onChange({ ...settings, backgroundColor })}
+            />
             <div className="flex flex-col gap-2">
               <Label>Directions</Label>
               <div className="grid grid-cols-2 gap-2">
@@ -441,7 +533,8 @@ export function SetupScreen({
               <span>
                 <span className="block text-base">Respond with keys or taps</span>
                 <span className="block text-sm text-neutral-600">
-                  Q W E, A S D, Z C, and the arrow keys. Wrong key is a miss.
+                  Off for court work. Turn it on to answer with keys or taps. A wrong key is a
+                  miss.
                 </span>
               </span>
               <Switch
@@ -467,6 +560,11 @@ export function SetupScreen({
           >
             Start
           </Button>
+          {canReview ? (
+            <Button type="button" variant="outline" className="h-14 text-lg" onClick={onReview}>
+              Review recordings
+            </Button>
+          ) : null}
           <p className="text-sm text-neutral-500">
             {settings.mode === "reps"
               ? `${resolvedReps(settings)} cues`
