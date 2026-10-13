@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Production deployment identity
 
-This private GitHub repository deploys `main` to the Vercel Hobby project `split-arrow`, owned by `darkprince558`. GitHub CLI login does not determine a commit's author: inherited `ajami558` Git config caused blocked deployments.
+This GitHub repository deploys `main` to the Vercel Hobby project `split-arrow`, owned by `darkprince558`. GitHub CLI login does not determine a commit's author: inherited `ajami558` Git config caused blocked deployments.
 
 Before creating a deployment commit in a new checkout, verify the signed-in GitHub account with `gh api user` and run `npm run setup:git` when using the verified owner account. The setup command checks both the repository and the authenticated owner's ID before changing local Git identity. Do not impersonate the owner for another contributor or rewrite existing commits to change attribution.
 
