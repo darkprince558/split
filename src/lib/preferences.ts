@@ -21,7 +21,8 @@ export function readPreferences(raw: string | null): Settings {
       typeof saved.settings !== "object"
     )
       return defaults;
-    const value = saved.settings;
+    const value = { ...saved.settings, clipLength: saved.settings.clipLength ?? "standard" };
+    if (!["standard", "longer"].includes(value.clipLength)) return defaults;
     const ranges = {
       difficulty: { min: 1, max: 10 },
       timerCustomSeconds: { min: 1, max: 3600 },

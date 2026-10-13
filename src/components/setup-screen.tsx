@@ -1,5 +1,6 @@
 "use client";
 
+import { DirectionPresets } from "@/components/direction-presets";
 import { ScreenHeading } from "@/components/screen-heading";
 
 import {
@@ -275,7 +276,7 @@ export function SetupScreen({
 
   return (
     <div
-      className="min-h-dvh overflow-y-auto bg-[#f5f5f7] text-[#1d1d1f]"
+      className="screen-enter min-h-dvh overflow-y-auto bg-[#f5f5f7] text-[#1d1d1f]"
       data-screen="setup"
     >
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 pt-7 pb-[calc(10rem+env(safe-area-inset-bottom))]">
@@ -478,6 +479,15 @@ export function SetupScreen({
             />
           </CollapsibleTrigger>
           <CollapsibleContent className="flex flex-col gap-4 pt-3">
+            {settings.record ? <section className="space-y-3 border-t border-neutral-200 pt-3" aria-labelledby="clip-length-label">
+              <Label id="clip-length-label" className="text-base">Clip length</Label>
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-neutral-100 p-1">
+                {(["standard", "longer"] as const).map((length) => <Button key={length} variant="ghost" aria-pressed={settings.clipLength === length}
+                  className={cn("press-feedback min-h-11 rounded-lg", settings.clipLength === length && "bg-white shadow-sm hover:bg-white")}
+                  onClick={() => onChange({ ...settings, clipLength: length })}>{length === "standard" ? "Standard" : "Longer"}</Button>)}
+              </div>
+              <p className="text-sm text-neutral-600">Clips save automatically. {settings.clipLength === "longer" ? "Keeps about 3 seconds after the real cue for more of your movement." : "Keeps about 1.2 seconds after the real cue."} Ending a drill stops recording immediately.</p>
+            </section> : null}
             <details className="settings-group">
               <summary>
                 Timing &amp; feints<span>Fine-tune the pace</span>
@@ -651,6 +661,7 @@ export function SetupScreen({
                     ),
                   )}
                 </div>
+                <DirectionPresets directions={settings.directions} onApply={(directions) => onChange({ ...settings, directions })} />
               </div>
             </details>
             <label className="flex min-h-11 items-center justify-between gap-4 py-1">
@@ -734,7 +745,7 @@ export function SetupScreen({
               <Play className="size-5" aria-hidden /> Start drill
             </Button>
             <p className="text-center text-xs text-neutral-600">
-              5 seconds to get ready
+              {settings.record ? "Check your camera, then 5 seconds to get ready" : "5 seconds to get ready"}
               {settings.respond
                 ? " · Keys and taps enabled"
                 : " · No tapping needed"}

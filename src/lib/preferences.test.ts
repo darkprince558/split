@@ -55,3 +55,14 @@ test("older millisecond timings are aligned with the visible slider precision", 
   assert.equal(result.holdMs, 980);
   assert.equal(result.fakeoutMs, 200);
 });
+
+test("existing preferences retain their choices and default to standard clips", () => {
+  const legacy = { ...createDefaultSettings(), difficulty: 3, record: false };
+  Reflect.deleteProperty(legacy, "clipLength");
+  const settings = readPreferences(JSON.stringify({ version: 1, settings: legacy }));
+  assert.equal(settings.difficulty, 3);
+  assert.equal(settings.record, false);
+  assert.equal(settings.clipLength, "standard");
+  const longer = { ...settings, clipLength: "longer" };
+  assert.deepEqual(readPreferences(JSON.stringify({version:1,settings:longer})), longer);
+});

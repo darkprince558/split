@@ -23,7 +23,7 @@ export function SummaryScreen({
 }) {
   return (
     <div
-      className="min-h-dvh overflow-y-auto bg-[#f5f5f7] text-[#1d1d1f]"
+      className="screen-enter min-h-dvh overflow-y-auto bg-[#f5f5f7] text-[#1d1d1f]"
       data-screen="summary"
     >
       <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center gap-6 px-5 py-10">

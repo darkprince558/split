@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test src/lib/drill.test.ts src/lib/clips.test.ts src/lib/preferences.test.ts src/lib/camera.test.ts"
+    "test": "node --experimental-strip-types --test src/lib/drill.test.ts src/lib/clips.test.ts src/lib/preferences.test.ts src/lib/camera.test.ts src/lib/direction-presets.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

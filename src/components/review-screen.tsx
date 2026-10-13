@@ -170,7 +170,7 @@ export function ReviewScreen({ sessionId, onBack }: {
   };
 
   return (
-    <div className="min-h-dvh overflow-y-auto bg-[#f5f5f7] text-[#1d1d1f]" data-screen="review">
+    <div className="screen-enter min-h-dvh overflow-y-auto bg-[#f5f5f7] text-[#1d1d1f]" data-screen="review">
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 py-7">
         <header className="flex items-start justify-between gap-4">
           <div>
