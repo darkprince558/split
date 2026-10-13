@@ -19,7 +19,7 @@ export function readDirectionPresets(raw: string | null): DirectionPreset[] {
   } catch { return []; }
 }
 
-export function presetNameError(name: string, presets: DirectionPreset[]) {
+export function presetNameError(name: string, presets: { name: string }[]) {
   const trimmed = name.trim();
   if (!trimmed) return "Give this preset a name.";
   if (trimmed.length > 32) return "Use 32 characters or fewer.";

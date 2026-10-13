@@ -1,5 +1,6 @@
 "use client";
 
+import { DrillPresets } from "@/components/drill-presets";
 import { DirectionPresets } from "@/components/direction-presets";
 import { ScreenHeading } from "@/components/screen-heading";
 import Image from "next/image";
@@ -291,6 +292,8 @@ export function SetupScreen({
             ignore the brief feints.
           </p>
         </header>
+
+        <DrillPresets settings={settings} onApply={(next) => { setPreviousTiming(null); onChange(next); }} />
 
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),1fr))] gap-4">
           <section

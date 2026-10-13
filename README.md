@@ -25,6 +25,7 @@ The drill runs by itself, so you can practise on court without touching the lapt
 | Feature | What it gives you |
 | --- | --- |
 | Eight court directions | Choose movements in a court-shaped grid and save named direction presets for next time. |
+| Saved drills | Name and restore a complete setup, including difficulty, timing, directions, session length, colors, sound, and recording preferences. |
 | Difficulty and timing | Use Warm-up, Club, or Match, choose any level from 1–10, or adjust the timing sliders. Undo restores custom timing after a difficulty change. |
 | Feints | Add up to three fake cues. Their frequency and flash time are adjustable. |
 | Flexible sessions | Practise for a set number of cues, a time limit, or until you choose to stop. |
@@ -52,6 +53,8 @@ The drill runs by itself, so you can practise on court without touching the lapt
 | `Q E Z C` | Diagonal answers when seated testing is enabled |
 
 ## Direction presets and clips
+
+Use **Saved drills → Save current setup** to name the entire drill setup. Saved drills appear at the top of the setup screen and can be applied with one tap. They are stored in this browser on this device. Applying or removing a saved drill offers Undo. Saving a new preset does not replace an existing one with the same name.
 
 Under **Customize drill → Directions**, select a pattern and choose **Save these directions**. Name it to reuse it later. Presets stay in this browser; Manage lets you remove a preset, with Undo available afterward. Applying a direction preset leaves pace, timing and other settings alone.
 

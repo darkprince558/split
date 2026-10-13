@@ -10,9 +10,9 @@ import {
 export const PREFERENCES_KEY = "split.settings.v1";
 
 // Stored preferences are untrusted: old or damaged data must never break a drill.
-export function readPreferences(raw: string | null): Settings {
+export function readSavedSettings(raw: string | null): Settings | null {
   const defaults = createDefaultSettings();
-  if (!raw) return defaults;
+  if (!raw) return null;
   try {
     const saved = JSON.parse(raw);
     if (
@@ -20,9 +20,9 @@ export function readPreferences(raw: string | null): Settings {
       !saved.settings ||
       typeof saved.settings !== "object"
     )
-      return defaults;
+      return null;
     const value = { ...saved.settings, clipLength: saved.settings.clipLength ?? "standard" };
-    if (!["standard", "longer"].includes(value.clipLength)) return defaults;
+    if (!["standard", "longer"].includes(value.clipLength)) return null;
     const ranges = {
       difficulty: { min: 1, max: 10 },
       timerCustomSeconds: { min: 1, max: 3600 },
@@ -42,31 +42,31 @@ export function readPreferences(raw: string | null): Settings {
           value[key] > range.max,
       )
     )
-      return defaults;
-    if (!["reps", "timer", "unlimited"].includes(value.mode)) return defaults;
+      return null;
+    if (!["reps", "timer", "unlimited"].includes(value.mode)) return null;
     if (![30, 60, 120, 300, "custom"].includes(value.timerChoice))
-      return defaults;
+      return null;
     if (![20, 50, 100, 200, "custom"].includes(value.repsChoice))
-      return defaults;
+      return null;
     if (
       ["sound", "respond", "record"].some(
         (key) => typeof value[key] !== "boolean",
       )
     )
-      return defaults;
+      return null;
     if (
       ![value.arrowColor, value.backgroundColor].every((color) =>
         SWATCHES.some((swatch) => swatch.id === color),
       )
     )
-      return defaults;
+      return null;
     if (
       !Array.isArray(value.directions) ||
       !value.directions.every((direction: unknown) =>
         DIRECTIONS.some((item) => item === direction),
       )
     )
-      return defaults;
+      return null;
     const restored = Object.fromEntries(
       Object.keys(defaults).map((key) => [key, value[key]]),
     ) as Settings;
@@ -75,8 +75,12 @@ export function readPreferences(raw: string | null): Settings {
       restored[key] = Math.round(restored[key] / 10) * 10;
     }
     restored.directions = [...new Set(restored.directions)];
-    return startBlockReason(restored) ? defaults : restored;
+    return startBlockReason(restored) ? null : restored;
   } catch {
-    return defaults;
+    return null;
   }
+}
+
+export function readPreferences(raw: string | null): Settings {
+  return readSavedSettings(raw) ?? createDefaultSettings();
 }
