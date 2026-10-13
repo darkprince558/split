@@ -7,6 +7,14 @@ export const metadata: Metadata = {
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
   applicationName: "Split",
+  icons: {
+    icon: [
+      { url: "/favicon.ico?v=orange-arrow", type: "image/x-icon", sizes: "64x64" },
+      { url: "/icon.svg?v=orange-arrow", type: "image/svg+xml", sizes: "any" },
+    ],
+    shortcut: "/icon.svg?v=orange-arrow",
+    apple: [{ url: "/apple-icon.png", type: "image/png", sizes: "180x180" }],
+  },
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",

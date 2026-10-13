@@ -1,6 +1,7 @@
 "use client";
 
 import { ScreenHeading } from "@/components/screen-heading";
+import Image from "next/image";
 
 import {
   ArrowDown,
@@ -280,7 +281,10 @@ export function SetupScreen({
     >
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 pt-7 pb-[calc(10rem+env(safe-area-inset-bottom))]">
         <header>
-          <ScreenHeading className="text-4xl font-semibold tracking-tight">Split</ScreenHeading>
+          <ScreenHeading className="flex items-center gap-3 text-4xl font-semibold tracking-tight">
+            <Image src="/icon.svg" width={44} height={44} alt="" aria-hidden className="size-11 shrink-0" />
+            <span>Split</span>
+          </ScreenHeading>
           <p className="mt-2 text-base leading-relaxed text-neutral-600">
             Place your laptop facing the court. Follow the arrow that stays;
             ignore the brief feints.
