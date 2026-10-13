@@ -210,13 +210,13 @@
 .surface-enter { animation: surface-appear 120ms ease-out; }
 button:not([data-slot="slider-thumb"]) { transition: background-color 120ms ease-out, border-color 120ms ease-out, box-shadow 120ms ease-out, transform 100ms ease-out; }
 [data-slot="collapsible-content"] {
-  overflow: hidden;
+  overflow: visible;
   height: var(--collapsible-panel-height);
   opacity: 1;
   transition: height 160ms ease-out, opacity 120ms ease-out;
 }
 [data-slot="collapsible-content"][data-starting-style],
-[data-slot="collapsible-content"][data-ending-style] { height: 0; opacity: 0; }
+[data-slot="collapsible-content"][data-ending-style] { height: 0; opacity: 0; overflow: hidden; }
 .settings-group[open] > :not(summary), .camera-help[open] > :not(summary) { animation: surface-appear 140ms ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .screen-enter, .surface-enter, .settings-group[open] > :not(summary), .camera-help[open] > :not(summary) { animation: none; }
