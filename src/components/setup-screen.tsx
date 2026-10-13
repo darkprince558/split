@@ -119,7 +119,12 @@ function ChoiceButton({
     >
       {children}
       {pressed ? (
-        <Check className="absolute top-1 right-1 size-3" aria-hidden />
+        <span
+          className="pointer-events-none absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border-2 border-white bg-primary text-white shadow-sm"
+          aria-hidden
+        >
+          <Check className="size-3" strokeWidth={3} />
+        </span>
       ) : null}
     </Button>
   );
