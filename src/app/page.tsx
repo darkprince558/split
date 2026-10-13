@@ -64,7 +64,7 @@ export default function Home() {
       <SummaryScreen
         summary={summary}
         note={runNote}
-        canReview={clipCount > 0}
+        clipCount={clipCount}
         onReview={() => {
           setReviewFrom("summary");
           setScreen("review");

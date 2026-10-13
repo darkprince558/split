@@ -15,7 +15,7 @@ import {
   Play,
   Video,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -130,93 +130,43 @@ function ChoiceButton({
   );
 }
 
+function secondsLabel(ms: number) {
+  return `${Number((ms / 1000).toFixed(2))} s`;
+}
+
 function RangeField({
-  id,
-  label,
-  min,
-  max,
-  value,
-  invalid,
-  onChange,
+  id, label, min, max, value, onChange, format = String,
 }: {
   id: string;
   label: string;
   min: number;
   max: number;
   value: number;
-  invalid?: boolean;
   onChange: (value: number) => void;
+  format?: (value: number) => string;
 }) {
-  const [text, setText] = useState(String(value));
-  const focused = useRef(false);
-
-  useEffect(() => {
-    if (!focused.current) setText(String(value));
-  }, [value]);
-
-  const commit = (raw: string, blur: boolean) => {
-    const parsed = Number(raw);
-    if (raw.trim() === "" || !Number.isFinite(parsed)) {
-      if (blur) {
-        onChange(min);
-        setText(String(min));
-      }
-      return;
-    }
-    const next = Math.trunc(parsed);
-    if (next > max) {
-      onChange(max);
-      setText(String(max));
-      return;
-    }
-    if (next < min) {
-      if (blur) {
-        onChange(min);
-        setText(String(min));
-      }
-      return;
-    }
-    onChange(next);
-    if (blur) setText(String(next));
-  };
-
   return (
-    <div className="flex flex-col gap-2" data-range={id}>
-      <Label htmlFor={id}>{label}</Label>
-      <div className="flex items-center gap-3">
-        <Slider
-          className="min-w-0 flex-1"
-          min={min}
-          max={max}
-          step={1}
-          value={[Math.min(max, Math.max(min, value))]}
-          onValueChange={(next) => {
-            const picked = Array.isArray(next) ? next[0] : next;
-            if (typeof picked === "number") onChange(picked);
-          }}
-          aria-label={label}
-        />
-        <Input
-          id={id}
-          type="number"
-          inputMode="numeric"
-          min={min}
-          max={max}
-          value={text}
-          aria-invalid={invalid}
-          className="h-11 w-24 text-base md:text-base"
-          onFocus={() => {
-            focused.current = true;
-          }}
-          onBlur={() => {
-            focused.current = false;
-            commit(text, true);
-          }}
-          onChange={(event) => {
-            setText(event.target.value);
-            commit(event.target.value, false);
-          }}
-        />
+    <div className="flex flex-col gap-1" data-range={id}>
+      <div className="flex items-baseline justify-between gap-3">
+        <Label id={`${id}-label`}>{label}</Label>
+        <output className="shrink-0 text-sm font-semibold text-primary tabular-nums">
+          {format(value)}
+        </output>
+      </div>
+      <Slider
+        min={min}
+        max={max}
+        step={1}
+        value={[Math.min(max, Math.max(min, value))]}
+        aria-labelledby={`${id}-label`}
+        getAriaValueText={(_, next) => format(next)}
+        onValueChange={(next) => {
+          const picked = Array.isArray(next) ? next[0] : next;
+          if (typeof picked === "number") onChange(picked);
+        }}
+      />
+      <div className="flex justify-between text-xs text-neutral-600" aria-hidden>
+        <span>{format(min)}</span><span>{format(max)}</span>
       </div>
     </div>
   );
@@ -500,55 +450,60 @@ export function SetupScreen({
                 Timing &amp; feints<span>Fine-tune the pace</span>
               </summary>
               <p className="mt-3 text-sm text-neutral-600">
-                1,000 ms = 1 second. Choosing a difficulty resets these timing
-                values.
+                Drag to adjust. Choosing a difficulty resets these values.
               </p>
               <div className="mt-4 flex flex-col gap-5">
-                <RangeField
-                  id="gap-min"
-                  label="Shortest wait between cues (ms)"
-                  min={RANGES.gapMin.min}
-                  max={RANGES.gapMin.max}
-                  value={settings.gapMin}
-                  invalid={block?.code === "gap"}
-                  onChange={(gapMin) => onChange({ ...settings, gapMin })}
-                />
-                <RangeField
-                  id="gap-max"
-                  label="Longest wait between cues (ms)"
-                  min={RANGES.gapMax.min}
-                  max={RANGES.gapMax.max}
-                  value={settings.gapMax}
-                  invalid={block?.code === "gap"}
-                  onChange={(gapMax) => onChange({ ...settings, gapMax })}
-                />
+                <div className="flex flex-col gap-1" data-range="cue-spacing">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <Label id="cue-spacing-label">Wait between cues</Label>
+                    <output className="text-sm font-semibold text-primary tabular-nums">
+                      {secondsLabel(settings.gapMin)} – {secondsLabel(settings.gapMax)}
+                    </output>
+                  </div>
+                  <Slider
+                    min={RANGES.gapMin.min}
+                    max={RANGES.gapMax.max}
+                    step={1}
+                    value={[settings.gapMin, settings.gapMax]}
+                    thumbCollisionBehavior="none"
+                    thumbLabels={["Shortest wait between cues", "Longest wait between cues"]}
+                    getAriaValueText={(_, next) => secondsLabel(next)}
+                    onValueChange={(next) => {
+                      if (!Array.isArray(next) || next.length !== 2) return;
+                      onChange({ ...settings, gapMin: Math.min(next[0], RANGES.gapMin.max), gapMax: next[1] });
+                    }}
+                  />
+                  <p className="text-xs text-neutral-600">
+                    Drag either end. Each cue waits a random time in this range.
+                  </p>
+                </div>
                 <RangeField
                   id="hold"
-                  label="Arrow hold time (ms)"
+                  label="Arrow stays visible"
                   min={RANGES.holdMs.min}
                   max={RANGES.holdMs.max}
                   value={settings.holdMs}
-                  invalid={block?.code === "hold"}
+                  format={secondsLabel}
                   onChange={(holdMs) => onChange({ ...settings, holdMs })}
                 />
                 <RangeField
                   id="fake-chance"
-                  label="Chance of feints (%)"
+                  label="Chance of feints"
                   min={RANGES.fakeoutChance.min}
                   max={RANGES.fakeoutChance.max}
                   value={settings.fakeoutChance}
-                  invalid={block?.code === "fakeout"}
+                  format={(value) => `${value}%`}
                   onChange={(fakeoutChance) =>
                     onChange({ ...settings, fakeoutChance })
                   }
                 />
                 <RangeField
                   id="fake-ms"
-                  label="Feint flash time (ms)"
+                  label="Feint flash time"
                   min={RANGES.fakeoutMs.min}
                   max={RANGES.fakeoutMs.max}
                   value={settings.fakeoutMs}
-                  invalid={block?.code === "fakeout-ms"}
+                  format={secondsLabel}
                   onChange={(fakeoutMs) => onChange({ ...settings, fakeoutMs })}
                 />
                 <RangeField
@@ -557,14 +512,14 @@ export function SetupScreen({
                   min={RANGES.feintCount.min}
                   max={RANGES.feintCount.max}
                   value={settings.feintCount}
+                  format={(value) => value === 0 ? "Off" : `Up to ${value}`}
                   onChange={(feintCount) =>
                     onChange({ ...settings, feintCount })
                   }
                 />
               </div>
               <p className="mt-4 text-sm text-neutral-600">
-                0 is no feint. 3 shows one, two, or three fake arrows. The real
-                arrow is the one that counts.
+                Feints are brief fake arrows. Follow the arrow that stays.
               </p>
             </details>
             <details className="settings-group">

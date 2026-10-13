@@ -7,14 +7,14 @@ import type { Summary } from "@/lib/drill";
 export function SummaryScreen({
   summary,
   note,
-  canReview,
+  clipCount,
   onReview,
   onAgain,
   onSetup,
 }: {
   summary: Summary;
   note: string | null;
-  canReview: boolean;
+  clipCount: number;
   onReview: () => void;
   onAgain: () => void;
   onSetup: () => void;
@@ -85,7 +85,7 @@ export function SummaryScreen({
             <RotateCcw className="size-5" aria-hidden />
             Repeat drill
           </Button>
-          {canReview ? (
+          {clipCount > 0 ? (
             <Button
               type="button"
               variant="outline"
@@ -93,7 +93,7 @@ export function SummaryScreen({
               onClick={onReview}
             >
               <Video className="size-5" aria-hidden />
-              Review recordings
+              Review recordings ({clipCount})
             </Button>
           ) : null}
           <Button

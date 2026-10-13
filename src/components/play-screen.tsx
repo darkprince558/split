@@ -282,12 +282,18 @@ function LiveDrill({
       if (!camera) return Promise.resolve();
       return (async () => {
         const blob = await camera.stop();
-        if (!blob || !keep) return;
+        if (!keep) return;
+        if (!blob) {
+          noteRef.current = "Couldn't record that cue. The drill is still running.";
+          onNote(noteRef.current);
+          return;
+        }
         indexRef.current += 1;
+        const clipIndex = indexRef.current;
         const saved = await saveClip({
           id: crypto.randomUUID(),
           sessionId,
-          index: indexRef.current,
+          index: clipIndex,
           direction: cue.direction,
           feints: cue.feints,
           mime: blob.type || "video/webm",
@@ -295,7 +301,7 @@ function LiveDrill({
           createdAt: Date.now(),
         });
         if (saved) {
-          savedCount.current = indexRef.current;
+          savedCount.current += 1;
           return;
         }
         noteRef.current = STORAGE_NOTE;

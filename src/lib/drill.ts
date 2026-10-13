@@ -567,10 +567,11 @@ export function progressLabel(input: {
   return formatClock(input.elapsedSeconds, "up");
 }
 
-export function clipFilename(index: number, direction: Direction, feints: Direction[]) {
+export function clipFilename(index: number, direction: Direction, feints: Direction[], mime = "video/webm") {
+  const extension = mime.split(";")[0].trim().toLowerCase() === "video/mp4" ? "mp4" : "webm";
   const number = String(Math.max(0, Math.trunc(index))).padStart(2, "0");
-  if (feints.length === 0) return `${number}-${direction}.webm`;
-  return `${number}-${direction}-feints-${feints.join("-")}.webm`;
+  if (feints.length === 0) return `${number}-${direction}.${extension}`;
+  return `${number}-${direction}-feints-${feints.join("-")}.${extension}`;
 }
 
 export function clipsCsv(
