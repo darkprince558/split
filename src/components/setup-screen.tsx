@@ -1,6 +1,20 @@
 "use client";
 
-import { Check, ChevronDown, Play, Video } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowDownLeft,
+  ArrowDownRight,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpLeft,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  CircleDot,
+  Play,
+  Video,
+} from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -64,16 +78,17 @@ const REPS_CHOICES: { id: RepsChoice; label: string }[] = [
   { id: "custom", label: "Custom" },
 ];
 
-const DIRECTION_TOGGLES: Direction[] = [
-  "left",
-  "right",
-  "back",
-  "forward",
-  "back-left",
-  "back-right",
-  "forward-left",
-  "forward-right",
-];
+const DIRECTION_GRID = [
+  { direction: "back-left", icon: ArrowUpLeft },
+  { direction: "back", icon: ArrowUp },
+  { direction: "back-right", icon: ArrowUpRight },
+  { direction: "left", icon: ArrowLeft },
+  { direction: null, icon: CircleDot },
+  { direction: "right", icon: ArrowRight },
+  { direction: "forward-left", icon: ArrowDownLeft },
+  { direction: "forward", icon: ArrowDown },
+  { direction: "forward-right", icon: ArrowDownRight },
+] as const;
 
 function ChoiceButton({
   pressed,
@@ -96,7 +111,7 @@ function ChoiceButton({
       aria-label={label}
       onClick={onClick}
       className={cn(
-        "relative min-h-11 rounded-xl border-neutral-300 text-sm font-medium",
+        "press-feedback relative h-auto min-h-11 rounded-xl border-neutral-300 px-2 py-2 text-center text-sm leading-tight font-medium whitespace-normal",
         pressed &&
           "border-primary bg-primary/8 font-semibold text-primary ring-1 ring-primary",
         className,
@@ -574,18 +589,59 @@ export function SetupScreen({
                 <span>{settings.directions.length} of 8 selected</span>
               </summary>
               <div className="mt-4 flex flex-col gap-2">
-                <Label>Choose the directions to practise</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {DIRECTION_TOGGLES.map((direction) => (
-                    <ChoiceButton
-                      key={direction}
-                      pressed={settings.directions.includes(direction)}
-                      onClick={() => toggleDirection(direction)}
-                      className="h-auto min-h-11 whitespace-normal px-2 text-center leading-tight"
-                    >
-                      {directionLabel(direction)}
-                    </ChoiceButton>
-                  ))}
+                <p className="text-sm text-neutral-600">
+                  Tap a direction to include it. The layout matches the arrows
+                  in your drill.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="press-feedback min-h-11 rounded-xl text-sm"
+                    onClick={() =>
+                      onChange({ ...settings, directions: [...DIRECTIONS] })
+                    }
+                  >
+                    All 8 directions
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="press-feedback min-h-11 rounded-xl text-sm"
+                    onClick={() =>
+                      onChange({ ...settings, directions: ["left", "right"] })
+                    }
+                  >
+                    Left &amp; right only
+                  </Button>
+                </div>
+                <div
+                  className="grid grid-cols-3 gap-2"
+                  role="group"
+                  aria-label="Court directions"
+                >
+                  {DIRECTION_GRID.map(({ direction, icon: Icon }) =>
+                    direction ? (
+                      <ChoiceButton
+                        key={direction}
+                        label={directionLabel(direction)}
+                        pressed={settings.directions.includes(direction)}
+                        onClick={() => toggleDirection(direction)}
+                        className="min-h-20 flex-col gap-1"
+                      >
+                        <Icon className="size-5" aria-hidden />
+                        {directionLabel(direction)}
+                      </ChoiceButton>
+                    ) : (
+                      <div
+                        key="centre"
+                        className="flex flex-col items-center justify-center gap-1 rounded-xl bg-neutral-100 text-sm text-neutral-600"
+                      >
+                        <Icon className="size-5" aria-hidden />
+                        Centre
+                      </div>
+                    ),
+                  )}
                 </div>
               </div>
             </details>
@@ -638,7 +694,7 @@ export function SetupScreen({
         <p className="text-center text-xs text-neutral-600">
           Your choices are remembered on this device.
         </p>
-        <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-neutral-200 bg-white/95 px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+        <footer className="setup-toolbar fixed inset-x-0 bottom-0 z-20 px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto flex w-full max-w-2xl flex-col gap-2">
             {block ? (
               <p
@@ -658,11 +714,11 @@ export function SetupScreen({
                     : "Open-ended"}{" "}
                 · {settings.directions.length} directions
               </span>
-              <span>{settings.record ? "Camera on" : "Camera off"}</span>
+              <span>{settings.record ? "Recording on" : "Recording off"}</span>
             </div>
             <Button
               type="button"
-              className="h-14 w-full gap-2 rounded-2xl text-lg font-semibold"
+              className="press-feedback h-14 w-full gap-2 rounded-2xl text-lg font-semibold"
               disabled={block !== null}
               aria-describedby={block ? "start-error" : undefined}
               onClick={onStart}

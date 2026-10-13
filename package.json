@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "setup:git": "node scripts/setup-git-author.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

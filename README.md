@@ -26,3 +26,11 @@ npm test
 npm run lint
 npm run build
 ```
+
+## Automatic Vercel deployment
+
+The GitHub `main` branch deploys automatically to [Split](https://split-phi-eosin.vercel.app) through the `split-arrow` Vercel project. The private-repository Hobby project belongs to `darkprince558`, so deployment commits must be attributed to that owner.
+
+For a fresh checkout or a cloud coding environment, sign in to GitHub CLI as `darkprince558` and run `npm run setup:git` before committing. The command verifies the signed-in account and configures this repository's local author using GitHub's privacy email. It leaves other repositories and existing commits alone. Account login and commit attribution are separate: an inherited `ajami558` author can block deployment even while the CLI is signed in as `darkprince558`.
+
+The Mac used for this project also has a Git conditional include scoped to the Split remote URLs, so new Split checkouts on that Mac inherit the correct identity. Other machines still need the setup command. Verify that Vercel reports `READY` for the pushed commit before claiming a release is live.
