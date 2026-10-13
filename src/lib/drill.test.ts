@@ -80,7 +80,7 @@ describe("start blocking", () => {
     );
     assert.equal(
       startBlockReason({ ...settings, repsChoice: "custom", repsCustom: 0 })?.message,
-      "Reps must be at least 1.",
+      "Choose at least 1 cue.",
     );
     assert.equal(
       startBlockReason({

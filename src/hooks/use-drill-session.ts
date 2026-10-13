@@ -113,7 +113,10 @@ export function useDrillSession(
 
     const elapsedSeconds = () => {
       const now = engine.paused ? engine.pauseStarted : performance.now();
-      return Math.max(0, (now - engine.sessionStart - engine.pausedTotal) / 1000);
+      return Math.max(
+        0,
+        (now - engine.sessionStart - engine.pausedTotal) / 1000,
+      );
     };
 
     const publish = () => {
@@ -174,7 +177,8 @@ export function useDrillSession(
     };
 
     const timerExpired = () =>
-      snapshot.mode === "timer" && elapsedSeconds() >= resolvedTimerSeconds(snapshot);
+      snapshot.mode === "timer" &&
+      elapsedSeconds() >= resolvedTimerSeconds(snapshot);
 
     const schedule = (ms: number, fn: () => void) => {
       clearTimer();
@@ -296,7 +300,10 @@ export function useDrillSession(
       if (!engine.paused) {
         engine.paused = true;
         engine.pauseStarted = performance.now();
-        engine.remaining = Math.max(0, engine.phaseEndsAt - engine.pauseStarted);
+        engine.remaining = Math.max(
+          0,
+          engine.phaseEndsAt - engine.pauseStarted,
+        );
         clearTimer();
         publish();
         return;
@@ -314,6 +321,29 @@ export function useDrillSession(
     apiRef.current = { answer, togglePause, stop };
 
     const onKey = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        stop();
+        return;
+      }
+      const interactive =
+        event.target instanceof HTMLElement &&
+        event.target.closest(
+          "button, input, textarea, select, [role='switch'], [contenteditable='true']",
+        );
+      if (event.key === " " && !interactive) {
+        event.preventDefault();
+        togglePause();
+        return;
+      }
+      if (interactive && (event.key === " " || event.key === "Enter")) return;
+      const editable =
+        event.target instanceof HTMLElement &&
+        event.target.closest(
+          "input, textarea, select, [contenteditable='true']",
+        );
+      if (editable) return;
       if (
         event.key === "ArrowLeft" ||
         event.key === "ArrowRight" ||
@@ -322,7 +352,6 @@ export function useDrillSession(
       ) {
         event.preventDefault();
       }
-      if (event.repeat) return;
       const direction = directionFromKey(event.key);
       if (!direction) return;
       answer(direction);

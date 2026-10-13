@@ -5,18 +5,25 @@ function preferredMime() {
 }
 
 export class CueCamera {
+  private closed = false;
   private stream: MediaStream | null = null;
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   private tail: Promise<void> = Promise.resolve();
 
   async open() {
+    this.closed = false;
     if (!navigator.mediaDevices?.getUserMedia) return false;
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user" },
         audio: false,
       });
+      if (this.closed || typeof MediaRecorder === "undefined") {
+        stream.getTracks().forEach((track) => track.stop());
+        return false;
+      }
+      this.stream = stream;
       return true;
     } catch {
       return false;
@@ -55,6 +62,7 @@ export class CueCamera {
   }
 
   close() {
+    this.closed = true;
     if (this.recorder && this.recorder.state !== "inactive") {
       try {
         this.recorder.stop();

@@ -6,12 +6,14 @@ import { ReviewScreen } from "@/components/review-screen";
 import { SetupScreen } from "@/components/setup-screen";
 import { SummaryScreen } from "@/components/summary-screen";
 import { primeAudio } from "@/lib/audio";
-import { createDefaultSettings, type Settings, type Summary } from "@/lib/drill";
+import { type Summary } from "@/lib/drill";
+import { useSettings } from "@/hooks/use-settings";
 
 type Screen = "setup" | "play" | "summary" | "review";
 
 export default function Home() {
-  const [settings, setSettings] = useState<Settings>(createDefaultSettings);
+  const [settings, changeSettings] = useSettings();
+  const [runSettings, setRunSettings] = useState(settings);
   const [screen, setScreen] = useState<Screen>("setup");
   const [summary, setSummary] = useState<Summary | null>(null);
   const [runId, setRunId] = useState(0);
@@ -22,9 +24,10 @@ export default function Home() {
 
   const start = useCallback(() => {
     primeAudio();
+    setRunSettings(settings);
     setRunId((id) => id + 1);
     setScreen("play");
-  }, []);
+  }, [settings]);
 
   const finish = useCallback((run: FinishedRun) => {
     setSummary(run.summary);
@@ -35,14 +38,23 @@ export default function Home() {
   }, []);
 
   if (screen === "play") {
-    return <PlayScreen key={runId} settings={settings} onFinish={finish} />;
+    return (
+      <PlayScreen
+        key={runId}
+        settings={runSettings}
+        onFinish={finish}
+        onCancel={() => setScreen("setup")}
+      />
+    );
   }
 
   if (screen === "review") {
     return (
       <ReviewScreen
         sessionId={reviewSession}
-        onBack={() => setScreen(reviewFrom === "summary" && summary ? "summary" : "setup")}
+        onBack={() =>
+          setScreen(reviewFrom === "summary" && summary ? "summary" : "setup")
+        }
       />
     );
   }
@@ -66,7 +78,7 @@ export default function Home() {
   return (
     <SetupScreen
       settings={settings}
-      onChange={setSettings}
+      onChange={changeSettings}
       onStart={start}
       onReview={() => {
         setReviewSession(null);

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Play, Video } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,9 +35,17 @@ import {
 import { hasAnyClips } from "@/lib/video-storage";
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
-  { id: "unlimited", label: "Unlimited", hint: "Keeps going until you hit Stop." },
-  { id: "timer", label: "Timer", hint: "Ends when the clock runs out." },
-  { id: "reps", label: "Reps", hint: "Ends after the last cue." },
+  {
+    id: "reps",
+    label: "Cues",
+    hint: "Choose how many directions to practise.",
+  },
+  { id: "timer", label: "Timed", hint: "Choose how long to practise." },
+  {
+    id: "unlimited",
+    label: "Open",
+    hint: "Keep going until you end the drill.",
+  },
 ];
 
 const TIMER_CHOICES: { id: TimerChoice; label: string }[] = [
@@ -88,12 +96,16 @@ function ChoiceButton({
       aria-label={label}
       onClick={onClick}
       className={cn(
-        "h-11 text-base",
-        pressed && "border-[#FF3B00] text-[#FF3B00]",
+        "relative min-h-11 rounded-xl border-neutral-300 text-sm font-medium",
+        pressed &&
+          "border-primary bg-primary/8 font-semibold text-primary ring-1 ring-primary",
         className,
       )}
     >
       {children}
+      {pressed ? (
+        <Check className="absolute top-1 right-1 size-3" aria-hidden />
+      ) : null}
     </Button>
   );
 }
@@ -272,251 +284,312 @@ export function SetupScreen({
   };
 
   return (
-    <div className="min-h-dvh overflow-y-auto bg-white text-black" data-screen="setup">
-      <main className="mx-auto flex w-full max-w-md flex-col gap-8 px-5 pt-10 pb-10">
+    <div
+      className="min-h-dvh overflow-y-auto bg-[#f5f5f7] text-[#1d1d1f]"
+      data-screen="setup"
+    >
+      <main className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 pt-7 pb-[calc(10rem+env(safe-area-inset-bottom))]">
         <header>
-          <h1 className="text-5xl font-semibold tracking-tight">Split</h1>
-          <p className="mt-2 text-lg text-neutral-700">
-            Read the shuttle. Split on the cue.
+          <h1 className="text-4xl font-semibold tracking-tight">Split</h1>
+          <p className="mt-2 text-base leading-relaxed text-neutral-600">
+            Place your laptop facing the court. Follow the arrow that stays;
+            ignore the brief feints.
           </p>
         </header>
 
-        <section className="flex flex-col gap-3">
-          <div className="flex items-baseline justify-between gap-3">
-            <Label id="difficulty-label" className="text-base">
-              Difficulty
-            </Label>
-            <span className="text-base tabular-nums">{settings.difficulty}</span>
-          </div>
-          <Slider
-            min={1}
-            max={10}
-            step={1}
-            value={[settings.difficulty]}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <section
+            className="setup-panel flex flex-col gap-3"
             aria-labelledby="difficulty-label"
-            onValueChange={(value) => {
-              const next = Array.isArray(value) ? value[0] : value;
-              if (typeof next === "number") onChange(applyDifficulty(settings, next));
-            }}
-          />
-          <div className="flex justify-between text-sm text-neutral-500">
-            <span>1</span>
-            <span>10</span>
-          </div>
-          <p className="text-base">{describeDifficulty(settings.difficulty)}</p>
-          <div className="grid grid-cols-3 gap-2">
-            {PRESETS.map((item) => (
-              <ChoiceButton
-                key={item.id}
-                pressed={preset === item.id}
-                onClick={() => onChange(applyDifficulty(settings, item.level))}
-              >
-                {item.label}
-              </ChoiceButton>
-            ))}
-          </div>
-          {preset === "custom" ? (
-            <p className="text-sm text-[#FF3B00]">Custom</p>
-          ) : null}
-        </section>
-
-        <section className="flex flex-col gap-3">
-          <Label className="text-base">Mode</Label>
-          <div className="grid grid-cols-3 gap-2">
-            {MODES.map((item) => (
-              <ChoiceButton
-                key={item.id}
-                pressed={settings.mode === item.id}
-                onClick={() => onChange({ ...settings, mode: item.id })}
-              >
-                {item.label}
-              </ChoiceButton>
-            ))}
-          </div>
-          {settings.mode === "timer" ? (
+          >
+            <div className="flex items-baseline justify-between gap-3">
+              <Label id="difficulty-label" className="text-base">
+                Difficulty
+              </Label>
+              <span className="rounded-lg bg-neutral-100 px-2 py-1 text-sm tabular-nums">
+                {settings.difficulty} / 10
+              </span>
+            </div>
             <div className="grid grid-cols-3 gap-2">
-              {TIMER_CHOICES.map((item) => (
+              {PRESETS.map((item) => (
                 <ChoiceButton
-                  key={String(item.id)}
-                  pressed={settings.timerChoice === item.id}
-                  onClick={() => onChange({ ...settings, timerChoice: item.id })}
+                  key={item.id}
+                  pressed={preset === item.id}
+                  onClick={() =>
+                    onChange(applyDifficulty(settings, item.level))
+                  }
                 >
                   {item.label}
                 </ChoiceButton>
               ))}
             </div>
-          ) : null}
-          {settings.mode === "reps" ? (
-            <div className="grid grid-cols-3 gap-2">
-              {REPS_CHOICES.map((item) => (
+            <Slider
+              min={1}
+              max={10}
+              step={1}
+              value={[settings.difficulty]}
+              aria-labelledby="difficulty-label"
+              onValueChange={(value) => {
+                const next = Array.isArray(value) ? value[0] : value;
+                if (typeof next === "number")
+                  onChange(applyDifficulty(settings, next));
+              }}
+            />
+            <div className="flex justify-between text-sm text-neutral-500">
+              <span>Slower</span>
+              <span>Faster</span>
+            </div>
+            <p className="text-sm text-neutral-600">
+              {describeDifficulty(settings.difficulty)}
+            </p>
+            {preset === "custom" ? (
+              <p className="text-sm text-primary">Custom timing</p>
+            ) : null}
+          </section>
+
+          <section
+            className="setup-panel flex flex-col gap-3"
+            aria-labelledby="session-label"
+          >
+            <Label id="session-label" className="text-base">
+              Session length
+            </Label>
+            <div className="grid grid-cols-3 gap-2 rounded-xl bg-neutral-100 p-1">
+              {MODES.map((item) => (
                 <ChoiceButton
-                  key={String(item.id)}
-                  pressed={settings.repsChoice === item.id}
-                  onClick={() => onChange({ ...settings, repsChoice: item.id })}
+                  key={item.id}
+                  pressed={settings.mode === item.id}
+                  onClick={() => onChange({ ...settings, mode: item.id })}
                 >
                   {item.label}
                 </ChoiceButton>
               ))}
             </div>
-          ) : null}
-          {settings.mode === "timer" && settings.timerChoice === "custom" ? (
-            <div className="flex items-center gap-3">
-              <Label htmlFor="custom-time" className="text-base">
-                Seconds
-              </Label>
-              <Input
-                id="custom-time"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                value={settings.timerCustomSeconds}
-                aria-invalid={block?.code === "timer"}
-                className="h-11 w-28 text-base md:text-base"
-                onChange={(event) =>
-                  onChange({
-                    ...settings,
-                    timerCustomSeconds: wholeNumber(event.target.value),
-                  })
-                }
-              />
-            </div>
-          ) : null}
-          {settings.mode === "reps" && settings.repsChoice === "custom" ? (
-            <div className="flex items-center gap-3">
-              <Label htmlFor="custom-reps" className="text-base">
-                Cues
-              </Label>
-              <Input
-                id="custom-reps"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                value={settings.repsCustom}
-                aria-invalid={block?.code === "reps"}
-                className="h-11 w-28 text-base md:text-base"
-                onChange={(event) =>
-                  onChange({
-                    ...settings,
-                    repsCustom: wholeNumber(event.target.value),
-                  })
-                }
-              />
-            </div>
-          ) : null}
-          <p className="text-sm text-neutral-600">{mode.hint}</p>
-        </section>
-
-        <section className="flex items-center justify-between gap-4 rounded-lg border border-neutral-200 px-4 py-3">
+            {settings.mode === "timer" ? (
+              <div className="grid grid-cols-3 gap-2">
+                {TIMER_CHOICES.map((item) => (
+                  <ChoiceButton
+                    key={String(item.id)}
+                    pressed={settings.timerChoice === item.id}
+                    onClick={() =>
+                      onChange({ ...settings, timerChoice: item.id })
+                    }
+                  >
+                    {item.label}
+                  </ChoiceButton>
+                ))}
+              </div>
+            ) : null}
+            {settings.mode === "reps" ? (
+              <div className="grid grid-cols-3 gap-2">
+                {REPS_CHOICES.map((item) => (
+                  <ChoiceButton
+                    key={String(item.id)}
+                    pressed={settings.repsChoice === item.id}
+                    onClick={() =>
+                      onChange({ ...settings, repsChoice: item.id })
+                    }
+                  >
+                    {item.label}
+                  </ChoiceButton>
+                ))}
+              </div>
+            ) : null}
+            {settings.mode === "timer" && settings.timerChoice === "custom" ? (
+              <div className="flex items-center gap-3">
+                <Label htmlFor="custom-time" className="text-base">
+                  Seconds
+                </Label>
+                <Input
+                  id="custom-time"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={settings.timerCustomSeconds}
+                  aria-invalid={block?.code === "timer"}
+                  className="h-11 w-28 text-base md:text-base"
+                  onChange={(event) =>
+                    onChange({
+                      ...settings,
+                      timerCustomSeconds: wholeNumber(event.target.value),
+                    })
+                  }
+                />
+              </div>
+            ) : null}
+            {settings.mode === "reps" && settings.repsChoice === "custom" ? (
+              <div className="flex items-center gap-3">
+                <Label htmlFor="custom-reps" className="text-base">
+                  Cues
+                </Label>
+                <Input
+                  id="custom-reps"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={settings.repsCustom}
+                  aria-invalid={block?.code === "reps"}
+                  className="h-11 w-28 text-base md:text-base"
+                  onChange={(event) =>
+                    onChange({
+                      ...settings,
+                      repsCustom: wholeNumber(event.target.value),
+                    })
+                  }
+                />
+              </div>
+            ) : null}
+            <p className="text-sm text-neutral-600">{mode.hint}</p>
+          </section>
+        </div>
+        <section className="setup-panel flex items-center justify-between gap-4">
           <span>
-            <span className="block text-lg font-medium">Record reactions</span>
+            <span className="flex items-center gap-2 text-base font-semibold">
+              <Video className="size-4" aria-hidden />
+              Record reactions
+            </span>
             <span className="block text-sm text-neutral-600">
-              The laptop camera films each cue, including the feints. Nothing is uploaded.
+              One clip per cue, saved only in this browser. Allow camera access
+              when you start.
             </span>
           </span>
           <Switch
             checked={settings.record}
-            onCheckedChange={(checked) => onChange({ ...settings, record: checked })}
+            onCheckedChange={(checked) =>
+              onChange({ ...settings, record: checked })
+            }
             aria-label="Record reactions"
           />
         </section>
 
-        <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
-          <CollapsibleTrigger className="flex w-full items-center justify-between py-1 text-left text-base">
-            Settings
+        <Collapsible
+          className="setup-panel"
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+        >
+          <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between text-left text-base font-semibold">
+            Customize drill
             <ChevronDown
               className={cn("size-4", settingsOpen && "rotate-180")}
               aria-hidden
             />
           </CollapsibleTrigger>
-          <CollapsibleContent className="flex flex-col gap-5 pt-4">
-            <p className="text-sm text-neutral-600">
-              Moving the difficulty slider overwrites gap, hold, and fakeout.
-            </p>
-            <div className="flex flex-col gap-5">
-              <RangeField
-                id="gap-min"
-                label="Min gap (ms)"
-                min={RANGES.gapMin.min}
-                max={RANGES.gapMin.max}
-                value={settings.gapMin}
-                invalid={block?.code === "gap"}
-                onChange={(gapMin) => onChange({ ...settings, gapMin })}
-              />
-              <RangeField
-                id="gap-max"
-                label="Max gap (ms)"
-                min={RANGES.gapMax.min}
-                max={RANGES.gapMax.max}
-                value={settings.gapMax}
-                invalid={block?.code === "gap"}
-                onChange={(gapMax) => onChange({ ...settings, gapMax })}
-              />
-              <RangeField
-                id="hold"
-                label="Real arrow stays (ms)"
-                min={RANGES.holdMs.min}
-                max={RANGES.holdMs.max}
-                value={settings.holdMs}
-                invalid={block?.code === "hold"}
-                onChange={(holdMs) => onChange({ ...settings, holdMs })}
-              />
-              <RangeField
-                id="fake-chance"
-                label="Fakeout chance (%)"
-                min={RANGES.fakeoutChance.min}
-                max={RANGES.fakeoutChance.max}
-                value={settings.fakeoutChance}
-                invalid={block?.code === "fakeout"}
-                onChange={(fakeoutChance) => onChange({ ...settings, fakeoutChance })}
-              />
-              <RangeField
-                id="fake-ms"
-                label="Fakeout flash (ms)"
-                min={RANGES.fakeoutMs.min}
-                max={RANGES.fakeoutMs.max}
-                value={settings.fakeoutMs}
-                invalid={block?.code === "fakeout-ms"}
-                onChange={(fakeoutMs) => onChange({ ...settings, fakeoutMs })}
-              />
-              <RangeField
-                id="feints"
-                label="Feints"
-                min={RANGES.feintCount.min}
-                max={RANGES.feintCount.max}
-                value={settings.feintCount}
-                onChange={(feintCount) => onChange({ ...settings, feintCount })}
-              />
-            </div>
-            <p className="text-sm text-neutral-600">
-              0 is no feint. 3 shows one, two, or three fake arrows. The real arrow is the one
-              that counts.
-            </p>
-            <SwatchRow
-              label="Arrow"
-              value={settings.arrowColor}
-              onChange={(arrowColor) => onChange({ ...settings, arrowColor })}
-            />
-            <SwatchRow
-              label="Background"
-              value={settings.backgroundColor}
-              onChange={(backgroundColor) => onChange({ ...settings, backgroundColor })}
-            />
-            <div className="flex flex-col gap-2">
-              <Label>Directions</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {DIRECTION_TOGGLES.map((direction) => (
-                  <ChoiceButton
-                    key={direction}
-                    pressed={settings.directions.includes(direction)}
-                    onClick={() => toggleDirection(direction)}
-                    className="h-auto min-h-11 whitespace-normal px-2 text-center leading-tight"
-                  >
-                    {directionLabel(direction)}
-                  </ChoiceButton>
-                ))}
+          <CollapsibleContent className="flex flex-col gap-4 pt-3">
+            <details className="settings-group">
+              <summary>
+                Timing &amp; feints<span>Fine-tune the pace</span>
+              </summary>
+              <p className="mt-3 text-sm text-neutral-600">
+                1,000 ms = 1 second. Choosing a difficulty resets these timing
+                values.
+              </p>
+              <div className="mt-4 flex flex-col gap-5">
+                <RangeField
+                  id="gap-min"
+                  label="Shortest wait between cues (ms)"
+                  min={RANGES.gapMin.min}
+                  max={RANGES.gapMin.max}
+                  value={settings.gapMin}
+                  invalid={block?.code === "gap"}
+                  onChange={(gapMin) => onChange({ ...settings, gapMin })}
+                />
+                <RangeField
+                  id="gap-max"
+                  label="Longest wait between cues (ms)"
+                  min={RANGES.gapMax.min}
+                  max={RANGES.gapMax.max}
+                  value={settings.gapMax}
+                  invalid={block?.code === "gap"}
+                  onChange={(gapMax) => onChange({ ...settings, gapMax })}
+                />
+                <RangeField
+                  id="hold"
+                  label="Arrow hold time (ms)"
+                  min={RANGES.holdMs.min}
+                  max={RANGES.holdMs.max}
+                  value={settings.holdMs}
+                  invalid={block?.code === "hold"}
+                  onChange={(holdMs) => onChange({ ...settings, holdMs })}
+                />
+                <RangeField
+                  id="fake-chance"
+                  label="Chance of feints (%)"
+                  min={RANGES.fakeoutChance.min}
+                  max={RANGES.fakeoutChance.max}
+                  value={settings.fakeoutChance}
+                  invalid={block?.code === "fakeout"}
+                  onChange={(fakeoutChance) =>
+                    onChange({ ...settings, fakeoutChance })
+                  }
+                />
+                <RangeField
+                  id="fake-ms"
+                  label="Feint flash time (ms)"
+                  min={RANGES.fakeoutMs.min}
+                  max={RANGES.fakeoutMs.max}
+                  value={settings.fakeoutMs}
+                  invalid={block?.code === "fakeout-ms"}
+                  onChange={(fakeoutMs) => onChange({ ...settings, fakeoutMs })}
+                />
+                <RangeField
+                  id="feints"
+                  label="Maximum feints per cue"
+                  min={RANGES.feintCount.min}
+                  max={RANGES.feintCount.max}
+                  value={settings.feintCount}
+                  onChange={(feintCount) =>
+                    onChange({ ...settings, feintCount })
+                  }
+                />
               </div>
-            </div>
-            <label className="flex items-center justify-between gap-4 py-1">
+              <p className="mt-4 text-sm text-neutral-600">
+                0 is no feint. 3 shows one, two, or three fake arrows. The real
+                arrow is the one that counts.
+              </p>
+            </details>
+            <details className="settings-group">
+              <summary>
+                Arrow &amp; background<span>Make the cue easy to see</span>
+              </summary>
+              <div className="mt-4 space-y-4">
+                <SwatchRow
+                  label="Arrow"
+                  value={settings.arrowColor}
+                  onChange={(arrowColor) =>
+                    onChange({ ...settings, arrowColor })
+                  }
+                />
+                <SwatchRow
+                  label="Background"
+                  value={settings.backgroundColor}
+                  onChange={(backgroundColor) =>
+                    onChange({ ...settings, backgroundColor })
+                  }
+                />
+              </div>
+            </details>
+            <details className="settings-group">
+              <summary>
+                Directions
+                <span>{settings.directions.length} of 8 selected</span>
+              </summary>
+              <div className="mt-4 flex flex-col gap-2">
+                <Label>Choose the directions to practise</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {DIRECTION_TOGGLES.map((direction) => (
+                    <ChoiceButton
+                      key={direction}
+                      pressed={settings.directions.includes(direction)}
+                      onClick={() => toggleDirection(direction)}
+                      className="h-auto min-h-11 whitespace-normal px-2 text-center leading-tight"
+                    >
+                      {directionLabel(direction)}
+                    </ChoiceButton>
+                  ))}
+                </div>
+              </div>
+            </details>
+            <label className="flex min-h-11 items-center justify-between gap-4 py-1">
               <span>
                 <span className="block text-base">Sound</span>
                 <span className="block text-sm text-neutral-600">
@@ -525,16 +598,20 @@ export function SetupScreen({
               </span>
               <Switch
                 checked={settings.sound}
-                onCheckedChange={(checked) => onChange({ ...settings, sound: checked })}
+                onCheckedChange={(checked) =>
+                  onChange({ ...settings, sound: checked })
+                }
                 aria-label="Sound"
               />
             </label>
-            <label className="flex items-center justify-between gap-4 py-1">
+            <label className="flex min-h-11 items-center justify-between gap-4 py-1">
               <span>
-                <span className="block text-base">Respond with keys or taps</span>
+                <span className="block text-base">
+                  Respond with keys or taps
+                </span>
                 <span className="block text-sm text-neutral-600">
-                  Off for court work. Turn it on to answer with keys or taps. A wrong key is a
-                  miss.
+                  Leave off when moving on court. Turn on for a seated reaction
+                  test using keys or the on-screen direction buttons.
                 </span>
               </span>
               <Switch
@@ -548,32 +625,58 @@ export function SetupScreen({
           </CollapsibleContent>
         </Collapsible>
 
-        <div className="flex flex-col gap-3">
-          <p className="min-h-5 text-sm" role="status">
-            {block?.message}
-          </p>
+        {canReview ? (
           <Button
             type="button"
-            className="h-14 text-lg font-semibold"
-            disabled={block !== null}
-            onClick={onStart}
+            variant="outline"
+            className="min-h-12 rounded-xl text-base"
+            onClick={onReview}
           >
-            Start
+            Review saved recordings
           </Button>
-          {canReview ? (
-            <Button type="button" variant="outline" className="h-14 text-lg" onClick={onReview}>
-              Review recordings
+        ) : null}
+        <p className="text-center text-xs text-neutral-600">
+          Your choices are remembered on this device.
+        </p>
+        <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-neutral-200 bg-white/95 px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+          <div className="mx-auto flex w-full max-w-2xl flex-col gap-2">
+            {block ? (
+              <p
+                id="start-error"
+                className="text-sm font-medium text-red-700"
+                role="status"
+              >
+                {block.message}
+              </p>
+            ) : null}
+            <div className="flex items-center justify-between gap-3 text-sm text-neutral-600">
+              <span>
+                {settings.mode === "reps"
+                  ? `${resolvedReps(settings)} cues`
+                  : settings.mode === "timer"
+                    ? `${resolvedTimerSeconds(settings)} seconds`
+                    : "Open-ended"}{" "}
+                · {settings.directions.length} directions
+              </span>
+              <span>{settings.record ? "Camera on" : "Camera off"}</span>
+            </div>
+            <Button
+              type="button"
+              className="h-14 w-full gap-2 rounded-2xl text-lg font-semibold"
+              disabled={block !== null}
+              aria-describedby={block ? "start-error" : undefined}
+              onClick={onStart}
+            >
+              <Play className="size-5" aria-hidden /> Start drill
             </Button>
-          ) : null}
-          <p className="text-sm text-neutral-500">
-            {settings.mode === "reps"
-              ? `${resolvedReps(settings)} cues`
-              : settings.mode === "timer"
-                ? `${resolvedTimerSeconds(settings)} seconds`
-                : "No set length"}
-            {settings.respond ? ". Answers count." : ". Cues run on their own."}
-          </p>
-        </div>
+            <p className="text-center text-xs text-neutral-600">
+              5 seconds to get ready
+              {settings.respond
+                ? " · Keys and taps enabled"
+                : " · No tapping needed"}
+            </p>
+          </div>
+        </footer>
       </main>
     </div>
   );

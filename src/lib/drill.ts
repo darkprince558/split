@@ -251,7 +251,7 @@ export function startBlockReason(settings: Settings): StartBlock | null {
   if (settings.mode === "reps") {
     const reps = resolvedReps(settings);
     if (!Number.isInteger(reps) || reps < 1) {
-      return { code: "reps", message: "Reps must be at least 1." };
+      return { code: "reps", message: "Choose at least 1 cue." };
     }
   }
 
