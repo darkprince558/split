@@ -1,5 +1,6 @@
 "use client";
 
+import { CameraCheck } from "@/components/camera-check";
 import { ScreenHeading } from "@/components/screen-heading";
 
 import {
@@ -22,7 +23,7 @@ import {
   type Summary,
 } from "@/lib/drill";
 import { saveClip } from "@/lib/video-storage";
-import { Pause, Play, Square, Video } from "lucide-react";
+import { Pause, Play, Square } from "lucide-react";
 
 const PAD: (Direction | null)[][] = [
   ["back-left", "back", "back-right"],
@@ -57,6 +58,10 @@ export function PlayScreen({
   const [note, setNote] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [skipCamera, setSkipCamera] = useState(false);
+  const [cameraChecked, setCameraChecked] = useState(false);
+  const [cameraDevice, setCameraDevice] = useState("");
+  const [cameraAttempt, setCameraAttempt] = useState(0);
+  const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
   const begin = useCallback(() => setReady(true), []);
   const background = swatchHex(settings.backgroundColor);
   const ink = inkForBackground(settings.backgroundColor);
@@ -73,7 +78,7 @@ export function PlayScreen({
       setNote(CAMERA_NOTE);
       setCamera("off");
     }, 8000);
-    cam.open().then((ok) => {
+    cam.open(cameraDevice || undefined).then((ok) => {
       window.clearTimeout(giveUp);
       if (cancelled) {
         cam.close();
@@ -84,6 +89,7 @@ export function PlayScreen({
         setCamera("off");
         return;
       }
+      setPreviewStream(cam.previewStream);
       setCamera("on");
     });
     return () => {
@@ -92,45 +98,18 @@ export function PlayScreen({
       cam.close();
       cameraRef.current = null;
     };
-  }, [settings.record, skipCamera]);
+  }, [settings.record, skipCamera, cameraDevice, cameraAttempt]);
 
-  if (camera === "pending") {
-    return (
-      <div
-        className="fixed inset-0 flex flex-col"
-        style={{ backgroundColor: background, color: ink }}
-        data-screen="play"
-        data-phase="camera"
-      >
-        <main className="m-auto flex w-full max-w-md flex-col items-center gap-5 px-6 text-center">
-          <Video className="size-9" aria-hidden />
-          <ScreenHeading className="text-3xl font-semibold">Allow camera access</ScreenHeading>
-          <p className="text-base opacity-75">
-            Use your browser’s camera prompt to record each cue. Video stays on
-            this device.
-          </p>
-          <Button
-            type="button"
-            className="h-12 rounded-xl px-6 text-base"
-            onClick={() => {
-              setSkipCamera(true);
-              setCamera("off");
-              setNote(null);
-            }}
-          >
-            Continue without recording
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-12 rounded-xl px-6 text-base"
-            onClick={onCancel}
-          >
-            Back to setup
-          </Button>
-        </main>
-      </div>
-    );
+  if (settings.record && !skipCamera && !cameraChecked) {
+    return <CameraCheck stream={previewStream} busy={camera === "pending"} error={note}
+      onChoose={(deviceId) => {
+        setPreviewStream(null); setNote(null); setCamera("pending");
+        setCameraDevice(deviceId); setCameraAttempt((value) => value + 1);
+      }}
+      onRetry={() => { setCameraDevice(""); setPreviewStream(null); setNote(null); setCamera("pending"); setCameraAttempt((value) => value + 1); }}
+      onReady={() => setCameraChecked(true)}
+      onSkip={() => { setSkipCamera(true); setCamera("off"); setNote(null); setPreviewStream(null); }}
+      onCancel={onCancel} />;
   }
 
   if (!ready) {
@@ -189,7 +168,7 @@ function ReadyScreen({
   }, [note, onReady]);
   return (
     <main
-      className="fixed inset-0 flex flex-col items-center justify-center gap-5 px-6 text-center"
+      className="screen-enter fixed inset-0 flex flex-col items-center justify-center gap-5 px-6 text-center"
       style={{ backgroundColor: background, color: ink }}
       data-screen="play"
       data-phase="ready"
@@ -255,6 +234,13 @@ function LiveDrill({
   onFinish: (run: FinishedRun) => void;
 }) {
   const cueRef = useRef<PlannedCue | null>(null);
+  const [cameraLost, setCameraLost] = useState(false);
+  useEffect(() => {
+    const tracks = cameraRef.current?.previewStream?.getVideoTracks() ?? [];
+    const ended = () => { setCameraLost(true); onNote("Camera disconnected. End the drill to reconnect it."); };
+    tracks.forEach((track) => track.addEventListener("ended", ended));
+    return () => tracks.forEach((track) => track.removeEventListener("ended", ended));
+  }, [cameraRef, onNote]);
   const recording = useRef<CueRecording | null>(null);
   const indexRef = useRef(0);
   const savedCount = useRef(0);
@@ -269,9 +255,9 @@ function LiveDrill({
       cueRef.current = cue;
       const camera = cameraRef.current;
       if (!cameraOn || !camera?.active) return;
-      recording.current = camera.start();
+      recording.current = camera.start(settings.clipLength === "longer" ? 3000 : 1200);
     },
-    [cameraOn, cameraRef],
+    [cameraOn, cameraRef, settings.clipLength],
   );
 
   const onCueEnd = useCallback(
@@ -399,7 +385,7 @@ function LiveDrill({
               className="px-2 text-xs tracking-wide opacity-70"
               data-camera-mark="on"
             >
-              Camera on
+              {cameraLost ? "Camera disconnected" : "Camera on"}
             </p>
           ) : null}
         </div>

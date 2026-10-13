@@ -49,6 +49,7 @@ export type Settings = {
   sound: boolean;
   respond: boolean;
   record: boolean;
+  clipLength: "standard" | "longer";
 };
 
 export type Feel = {
@@ -232,6 +233,7 @@ export function createDefaultSettings(): Settings {
       sound: true,
       respond: false,
       record: true,
+      clipLength: "standard",
     },
     5,
   );

@@ -26,8 +26,10 @@ export class CueRecording {
   private result = new Promise<RecordedCue | null>((resolve) => { this.resolve = resolve; });
   private recorder: MediaRecorder;
   private onDone: () => void;
+  private tailMs: number;
 
-  constructor(stream: MediaStream, onDone: () => void) {
+  constructor(stream: MediaStream, onDone: () => void, tailMs = 1200) {
+    this.tailMs = tailMs;
     this.onDone = onDone;
     const mime = preferredMime();
     this.recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
@@ -35,6 +37,7 @@ export class CueRecording {
       if (event.data.size) this.chunks.push(event.data);
     };
     this.recorder.onstop = () => {
+      if (!this.stopping) this.durationMs = this.elapsed();
       const blob = new Blob(this.chunks, { type: this.recorder.mimeType || this.chunks[0]?.type || "video/webm" });
       this.settle(blob.size ? { blob, realCueMs: this.realCueMs, durationMs: this.durationMs } : null);
     };
@@ -67,7 +70,7 @@ export class CueRecording {
   finish(keepTail = true) {
     // Ending while paused saves what was captured; it never turns the camera back on.
     const endAt = keepTail && this.pausedAt === null && this.realCueMs !== undefined
-      ? this.realCueMs + 1200 : 0;
+      ? this.realCueMs + this.tailMs : 0;
     const check = () => {
       if (this.stopping || this.settled) return;
       const remaining = endAt - this.elapsed();
@@ -108,11 +111,11 @@ export class CueCamera {
   private stream: MediaStream | null = null;
   private recordings = new Set<CueRecording>();
 
-  async open() {
+  async open(deviceId?: string) {
     this.closed = false;
     if (!navigator.mediaDevices?.getUserMedia) return false;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId } } : true, audio: false });
       if (this.closed || typeof MediaRecorder === "undefined") {
         stream.getTracks().forEach((track) => track.stop());
         return false;
@@ -122,12 +125,14 @@ export class CueCamera {
     } catch { return false; }
   }
 
-  get active() { return this.stream !== null; }
+  get active() { return this.stream?.getVideoTracks().some((track) => track.readyState === "live") ?? false; }
 
-  start() {
-    if (!this.stream || this.closed) return null;
+  get previewStream() { return this.stream; }
+
+  start(tailMs = 1200) {
+    if (!this.stream || !this.active || this.closed) return null;
     try {
-      const recording = new CueRecording(this.stream, () => this.recordings.delete(recording));
+      const recording = new CueRecording(this.stream, () => this.recordings.delete(recording), tailMs);
       this.recordings.add(recording);
       return recording;
     } catch { return null; }

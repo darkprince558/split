@@ -139,3 +139,33 @@ test("closing a pending tail resolves the save and cancels its timer", async (co
   advance(5000);
   assert.equal(completions, 1);
 });
+
+test("longer clips retain three seconds after the real cue without changing its marker", async (context) => {
+  const { stream, advance } = recorderFixture(context);
+  const clip = new CueRecording(stream, () => {}, 3000);
+  advance(200);
+  clip.markRealCue();
+  const result = clip.finish();
+  advance(3000);
+  const saved = await result;
+  assert.equal(saved?.realCueMs, 200);
+  assert.equal(saved?.durationMs, 3200);
+});
+
+test("camera selection requests the exact device and releases it on close", async (context) => {
+  const oldNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  context.after(() => { if (oldNavigator) Object.defineProperty(globalThis,"navigator",oldNavigator); });
+  recorderFixture(context);
+  let constraints: MediaStreamConstraints | undefined;
+  let stopped = false;
+  const stream = {getVideoTracks:()=>[{readyState:"live"}],getTracks:()=>[{stop:()=>{stopped=true;}}]} as unknown as MediaStream;
+  Object.defineProperty(globalThis,"navigator",{configurable:true,value:{mediaDevices:{getUserMedia:async (value: MediaStreamConstraints)=>{constraints=value;return stream;}}}});
+  const camera = new CueCamera();
+  assert.equal(await camera.open("external-camera"),true);
+  assert.deepEqual(constraints,{video:{deviceId:{exact:"external-camera"}},audio:false});
+  assert.equal(camera.previewStream,stream);
+  assert.equal(camera.active,true);
+  camera.close();
+  assert.equal(stopped,true);
+  assert.equal(camera.active,false);
+});
