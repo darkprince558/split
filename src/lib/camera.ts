@@ -4,136 +4,146 @@ function preferredMime() {
   return types.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 }
 
+export type RecordedCue = {
+  blob: Blob;
+  realCueMs?: number;
+  durationMs: number;
+};
+
+// Separate recorders let a reaction finish while the next cue starts on time.
+// Paused time is excluded from both the video and the cue's timeline marker.
+export class CueRecording {
+  private chunks: Blob[] = [];
+  private startedAt = performance.now();
+  private pausedAt: number | null = null;
+  private pausedTotal = 0;
+  private realCueMs: number | undefined;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private stopping = false;
+  private settled = false;
+  private durationMs = 0;
+  private resolve!: (result: RecordedCue | null) => void;
+  private result = new Promise<RecordedCue | null>((resolve) => { this.resolve = resolve; });
+  private recorder: MediaRecorder;
+  private onDone: () => void;
+
+  constructor(stream: MediaStream, onDone: () => void) {
+    this.onDone = onDone;
+    const mime = preferredMime();
+    this.recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    this.recorder.ondataavailable = (event) => {
+      if (event.data.size) this.chunks.push(event.data);
+    };
+    this.recorder.onstop = () => {
+      const blob = new Blob(this.chunks, { type: this.recorder.mimeType || this.chunks[0]?.type || "video/webm" });
+      this.settle(blob.size ? { blob, realCueMs: this.realCueMs, durationMs: this.durationMs } : null);
+    };
+    this.recorder.onerror = () => { this.abort(); this.settle(null); };
+    this.recorder.start();
+    this.startedAt = performance.now();
+  }
+
+  private elapsed() {
+    return Math.max(0, (this.pausedAt ?? performance.now()) - this.startedAt - this.pausedTotal);
+  }
+
+  markRealCue() {
+    if (!this.stopping) this.realCueMs = this.elapsed();
+  }
+
+  pause() {
+    if (this.recorder.state !== "recording" || this.stopping) return;
+    this.recorder.pause();
+    this.pausedAt = performance.now();
+  }
+
+  resume() {
+    if (this.recorder.state !== "paused" || this.stopping) return;
+    this.recorder.resume();
+    this.pausedTotal += performance.now() - (this.pausedAt ?? performance.now());
+    this.pausedAt = null;
+  }
+
+  finish(keepTail = true) {
+    // Ending while paused saves what was captured; it never turns the camera back on.
+    const endAt = keepTail && this.pausedAt === null && this.realCueMs !== undefined
+      ? this.realCueMs + 1200 : 0;
+    const check = () => {
+      if (this.stopping || this.settled) return;
+      const remaining = endAt - this.elapsed();
+      if (remaining > 0) {
+        this.timer = setTimeout(check, this.pausedAt !== null ? 100 : remaining);
+      } else this.abort();
+    };
+    clearTimeout(this.timer);
+    check();
+    return this.result;
+  }
+
+  abort() {
+    clearTimeout(this.timer);
+    if (this.stopping || this.settled) return;
+    this.stopping = true;
+    this.durationMs = this.elapsed();
+    try {
+      // A broken encoder must not leave the finish screen waiting indefinitely.
+      this.timer = setTimeout(() => this.settle(null), 5000);
+      if (this.recorder.state !== "inactive") this.recorder.stop();
+      else this.settle(null);
+    } catch { this.settle(null); }
+  }
+
+  private settle(result: RecordedCue | null) {
+    if (this.settled) return;
+    this.settled = true;
+    clearTimeout(this.timer);
+    this.chunks = [];
+    this.onDone();
+    this.resolve(result);
+  }
+}
+
 export class CueCamera {
   private closed = false;
   private stream: MediaStream | null = null;
-  private recorder: MediaRecorder | null = null;
-  private chunks: Blob[] = [];
-  private tail: Promise<void> = Promise.resolve();
+  private recordings = new Set<CueRecording>();
 
   async open() {
     this.closed = false;
     if (!navigator.mediaDevices?.getUserMedia) return false;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-        audio: false,
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
       if (this.closed || typeof MediaRecorder === "undefined") {
         stream.getTracks().forEach((track) => track.stop());
         return false;
       }
       this.stream = stream;
       return true;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   }
 
-  get active() {
-    return this.stream !== null;
-  }
+  get active() { return this.stream !== null; }
 
   start() {
-    this.tail = this.tail.then(() => this.startNow()).catch(() => undefined);
+    if (!this.stream || this.closed) return null;
+    try {
+      const recording = new CueRecording(this.stream, () => this.recordings.delete(recording));
+      this.recordings.add(recording);
+      return recording;
+    } catch { return null; }
   }
 
-  stop() {
-    let resolve: (blob: Blob | null) => void = () => undefined;
-    const done = new Promise<Blob | null>((next) => {
-      resolve = next;
-    });
-    this.tail = this.tail
-      .then(async () => {
-        resolve(await this.finishRecorder());
-      })
-      .catch(() => {
-        resolve(null);
-      });
-    return done;
-  }
+  pause() { this.recordings.forEach((recording) => recording.pause()); }
+  resume() { this.recordings.forEach((recording) => recording.resume()); }
 
-  pause() {
-    if (this.recorder?.state === "recording") this.recorder.pause();
-  }
-
-  resume() {
-    if (this.recorder?.state === "paused") this.recorder.resume();
-  }
+  // Flush all pending tails when ending a paused drill.
+  finishPending() { this.recordings.forEach((recording) => recording.finish(false)); }
 
   close() {
     this.closed = true;
-    if (this.recorder && this.recorder.state !== "inactive") {
-      try {
-        this.recorder.stop();
-      } catch {
-        // The track is about to stop anyway.
-      }
-    }
+    this.recordings.forEach((recording) => recording.abort());
+    this.recordings.clear();
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;
-    this.recorder = null;
-    this.chunks = [];
-  }
-
-  private async startNow() {
-    if (!this.stream) return;
-    if (this.recorder && this.recorder.state !== "inactive") {
-      await this.finishRecorder();
-    }
-    const mime = preferredMime();
-    this.chunks = [];
-    let recorder: MediaRecorder;
-    try {
-      recorder = mime
-        ? new MediaRecorder(this.stream, { mimeType: mime })
-        : new MediaRecorder(this.stream);
-    } catch {
-      this.recorder = null;
-      return;
-    }
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) this.chunks.push(event.data);
-    };
-    try {
-      recorder.start();
-      this.recorder = recorder;
-    } catch {
-      this.recorder = null;
-    }
-  }
-
-  private finishRecorder() {
-    const recorder = this.recorder;
-    if (!recorder || recorder.state === "inactive") {
-      const blob = this.chunks.length
-        ? new Blob(this.chunks, { type: this.chunks[0]?.type || "video/webm" })
-        : null;
-      this.chunks = [];
-      this.recorder = null;
-      return Promise.resolve(blob && blob.size > 0 ? blob : null);
-    }
-
-    return new Promise<Blob | null>((resolve) => {
-      const mime = recorder.mimeType || "video/webm";
-      recorder.onstop = () => {
-        const blob = new Blob(this.chunks, { type: mime });
-        this.chunks = [];
-        this.recorder = null;
-        resolve(blob.size > 0 ? blob : null);
-      };
-      recorder.onerror = () => {
-        this.chunks = [];
-        this.recorder = null;
-        resolve(null);
-      };
-      try {
-        if (recorder.state === "paused") recorder.resume();
-        recorder.stop();
-      } catch {
-        this.recorder = null;
-        resolve(null);
-      }
-    });
   }
 }

@@ -16,12 +16,12 @@ describe("clip names", () => {
 
   it("writes a csv of clip, real direction, and feints", () => {
     const csv = clipsCsv([
-      { filename: "03-left-feints-right-back.webm", direction: "left", feints: ["right", "back"] },
+      { filename: "03-left-feints-right-back.webm", direction: "left", feints: ["right", "back"], realCueMs: 398.4 },
       { filename: "04-forward.webm", direction: "forward", feints: [] },
     ]);
     assert.equal(
       csv,
-      "clip,real,feints\n03-left-feints-right-back.webm,Left,Right; Back\n04-forward.webm,Forward,\n",
+      "clip,real,feints,real_cue_seconds\n03-left-feints-right-back.webm,Left,Right; Back,0.398\n04-forward.webm,Forward,,\n",
     );
   });
 });

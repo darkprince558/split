@@ -28,6 +28,7 @@ export type PlannedCue = {
 export type DrillView = {
   phase: DrillPhase;
   paused: boolean;
+  finishing: boolean;
   shown: Direction | null;
   progress: string;
   cueId: number;
@@ -38,6 +39,7 @@ export type DrillView = {
 const EMPTY_VIEW: DrillView = {
   phase: "gap",
   paused: false,
+  finishing: false,
   shown: null,
   progress: "",
   cueId: 0,
@@ -50,6 +52,9 @@ export function useDrillSession(
   onFinish: (summary: Summary) => void,
   hooks: {
     onCueStart: (cue: PlannedCue) => void;
+    onRealCue: () => void;
+    onPause: (paused: boolean) => void;
+    onEnding: () => void;
     onCueEnd: (keep: boolean) => Promise<void> | void;
   },
 ) {
@@ -124,6 +129,7 @@ export function useDrillSession(
       setView({
         phase: engine.phase,
         paused: engine.paused,
+        finishing: finished,
         shown: engine.paused ? null : engine.shown,
         cueId: engine.cueId,
         cueReal: engine.real,
@@ -162,6 +168,8 @@ export function useDrillSession(
       clearTimer();
       if (clock !== null) window.clearInterval(clock);
       closeClip();
+      if (engine.paused || stoppedEarly) hooksRef.current.onEnding();
+      publish();
       const summary = summarize({
         hits: engine.hits,
         misses: engine.misses,
@@ -169,6 +177,8 @@ export function useDrillSession(
         reps: engine.reps,
         respond: snapshot.respond,
         stoppedEarly,
+        elapsedSeconds: elapsedSeconds(),
+        difficulty: snapshot.difficulty,
       });
       void (async () => {
         await Promise.all(pendingSaves);
@@ -201,6 +211,7 @@ export function useDrillSession(
       engine.cueStartedAt = performance.now();
       if (opening) engine.cueId += 1;
       openClip();
+      hooksRef.current.onRealCue();
       publish();
       if (snapshot.sound) playTick();
       schedule(snapshot.holdMs, () => {
@@ -299,6 +310,7 @@ export function useDrillSession(
       if (finished) return;
       if (!engine.paused) {
         engine.paused = true;
+        hooksRef.current.onPause(true);
         engine.pauseStarted = performance.now();
         engine.remaining = Math.max(
           0,
@@ -311,6 +323,7 @@ export function useDrillSession(
       const pausedFor = performance.now() - engine.pauseStarted;
       engine.pausedTotal += pausedFor;
       engine.paused = false;
+      hooksRef.current.onPause(false);
       if (engine.phase === "live") engine.cueStartedAt += pausedFor;
       publish();
       schedule(engine.remaining, onEnd);

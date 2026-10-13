@@ -1,5 +1,7 @@
 "use client";
 
+import { ScreenHeading } from "@/components/screen-heading";
+
 import {
   ArrowDown,
   ArrowDownLeft,
@@ -33,6 +35,10 @@ import {
   RANGES,
   SWATCHES,
   activePreset,
+  feelMatches,
+  timingSnapshot,
+  colorsAreReadable,
+  swatchHex,
   applyDifficulty,
   describeDifficulty,
   directionLabel,
@@ -135,7 +141,7 @@ function secondsLabel(ms: number) {
 }
 
 function RangeField({
-  id, label, min, max, value, onChange, format = String,
+  id, label, min, max, value, onChange, format = String, step = 1, disabled = false,
 }: {
   id: string;
   label: string;
@@ -144,9 +150,11 @@ function RangeField({
   value: number;
   onChange: (value: number) => void;
   format?: (value: number) => string;
+  step?: number;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1" data-range={id}>
+    <div className={cn("flex flex-col gap-1", disabled && "opacity-50")} data-range={id}>
       <div className="flex items-baseline justify-between gap-3">
         <Label id={`${id}-label`}>{label}</Label>
         <output className="shrink-0 text-sm font-semibold text-primary tabular-nums">
@@ -156,7 +164,8 @@ function RangeField({
       <Slider
         min={min}
         max={max}
-        step={1}
+        step={step}
+        disabled={disabled}
         value={[Math.min(max, Math.max(min, value))]}
         aria-labelledby={`${id}-label`}
         getAriaValueText={(_, next) => format(next)}
@@ -225,6 +234,17 @@ export function SetupScreen({
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [canReview, setCanReview] = useState(false);
+  const [previousTiming, setPreviousTiming] = useState<ReturnType<typeof timingSnapshot> | null>(null);
+  const chooseDifficulty = (level: number) => {
+    if (!feelMatches(settings)) setPreviousTiming(timingSnapshot(settings));
+    onChange(applyDifficulty(settings, level));
+  };
+  const changeTiming = (next: Settings) => {
+    setPreviousTiming(null);
+    onChange(next);
+  };
+  const readable = colorsAreReadable(settings.arrowColor, settings.backgroundColor);
+  const feintsOff = settings.feintCount === 0 || settings.directions.length < 2;
   const block = startBlockReason(settings);
   const preset = activePreset(settings);
   const mode = MODES.find((item) => item.id === settings.mode) ?? MODES[2];
@@ -260,20 +280,20 @@ export function SetupScreen({
     >
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 pt-7 pb-[calc(10rem+env(safe-area-inset-bottom))]">
         <header>
-          <h1 className="text-4xl font-semibold tracking-tight">Split</h1>
+          <ScreenHeading className="text-4xl font-semibold tracking-tight">Split</ScreenHeading>
           <p className="mt-2 text-base leading-relaxed text-neutral-600">
             Place your laptop facing the court. Follow the arrow that stays;
             ignore the brief feints.
           </p>
         </header>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),1fr))] gap-4">
           <section
             className="setup-panel flex flex-col gap-3"
             aria-labelledby="difficulty-label"
           >
             <div className="flex items-baseline justify-between gap-3">
-              <Label id="difficulty-label" className="text-base">
+              <Label id="difficulty-label" tabIndex={-1} className="text-base">
                 Difficulty
               </Label>
               <span className="rounded-lg bg-neutral-100 px-2 py-1 text-sm tabular-nums">
@@ -286,7 +306,7 @@ export function SetupScreen({
                   key={item.id}
                   pressed={preset === item.id}
                   onClick={() =>
-                    onChange(applyDifficulty(settings, item.level))
+                    chooseDifficulty(item.level)
                   }
                 >
                   {item.label}
@@ -302,7 +322,7 @@ export function SetupScreen({
               onValueChange={(value) => {
                 const next = Array.isArray(value) ? value[0] : value;
                 if (typeof next === "number")
-                  onChange(applyDifficulty(settings, next));
+                  chooseDifficulty(next);
               }}
             />
             <div className="flex justify-between text-sm text-neutral-500">
@@ -312,8 +332,18 @@ export function SetupScreen({
             <p className="text-sm text-neutral-600">
               {describeDifficulty(settings.difficulty)}
             </p>
-            {preset === "custom" ? (
-              <p className="text-sm text-primary">Custom timing</p>
+            {!feelMatches(settings) ? (
+              <p className="text-sm text-primary">Custom timing · Choosing a difficulty replaces it.</p>
+            ) : null}
+            {previousTiming ? (
+              <div className="flex flex-wrap items-center justify-between gap-1 text-sm" role="status">
+                <span className="text-neutral-600">Timing updated.</span>
+                <Button variant="ghost" className="min-h-11 text-primary" onClick={() => {
+                  onChange({ ...settings, ...previousTiming });
+                  setPreviousTiming(null);
+                  document.getElementById("difficulty-label")?.focus({ preventScroll: true });
+                }}>Undo timing change</Button>
+              </div>
             ) : null}
           </section>
 
@@ -326,13 +356,16 @@ export function SetupScreen({
             </Label>
             <div className="grid grid-cols-3 gap-2 rounded-xl bg-neutral-100 p-1">
               {MODES.map((item) => (
-                <ChoiceButton
+                <Button
                   key={item.id}
-                  pressed={settings.mode === item.id}
+                  type="button"
+                  variant="ghost"
+                  aria-pressed={settings.mode === item.id}
+                  className={cn("press-feedback min-h-11 rounded-lg", settings.mode === item.id && "bg-white shadow-sm hover:bg-white")}
                   onClick={() => onChange({ ...settings, mode: item.id })}
                 >
                   {item.label}
-                </ChoiceButton>
+                </Button>
               ))}
             </div>
             {settings.mode === "timer" ? (
@@ -463,14 +496,14 @@ export function SetupScreen({
                   <Slider
                     min={RANGES.gapMin.min}
                     max={RANGES.gapMax.max}
-                    step={1}
+                    step={10}
                     value={[settings.gapMin, settings.gapMax]}
                     thumbCollisionBehavior="none"
                     thumbLabels={["Shortest wait between cues", "Longest wait between cues"]}
                     getAriaValueText={(_, next) => secondsLabel(next)}
                     onValueChange={(next) => {
                       if (!Array.isArray(next) || next.length !== 2) return;
-                      onChange({ ...settings, gapMin: Math.min(next[0], RANGES.gapMin.max), gapMax: next[1] });
+                      changeTiming({ ...settings, gapMin: next[0], gapMax: next[1] });
                     }}
                   />
                   <p className="text-xs text-neutral-600">
@@ -479,32 +512,13 @@ export function SetupScreen({
                 </div>
                 <RangeField
                   id="hold"
+                  step={10}
                   label="Arrow stays visible"
                   min={RANGES.holdMs.min}
                   max={RANGES.holdMs.max}
                   value={settings.holdMs}
                   format={secondsLabel}
-                  onChange={(holdMs) => onChange({ ...settings, holdMs })}
-                />
-                <RangeField
-                  id="fake-chance"
-                  label="Chance of feints"
-                  min={RANGES.fakeoutChance.min}
-                  max={RANGES.fakeoutChance.max}
-                  value={settings.fakeoutChance}
-                  format={(value) => `${value}%`}
-                  onChange={(fakeoutChance) =>
-                    onChange({ ...settings, fakeoutChance })
-                  }
-                />
-                <RangeField
-                  id="fake-ms"
-                  label="Feint flash time"
-                  min={RANGES.fakeoutMs.min}
-                  max={RANGES.fakeoutMs.max}
-                  value={settings.fakeoutMs}
-                  format={secondsLabel}
-                  onChange={(fakeoutMs) => onChange({ ...settings, fakeoutMs })}
+                  onChange={(holdMs) => changeTiming({ ...settings, holdMs })}
                 />
                 <RangeField
                   id="feints"
@@ -514,8 +528,38 @@ export function SetupScreen({
                   value={settings.feintCount}
                   format={(value) => value === 0 ? "Off" : `Up to ${value}`}
                   onChange={(feintCount) =>
-                    onChange({ ...settings, feintCount })
+                    changeTiming({ ...settings, feintCount })
                   }
+                />
+                {feintsOff || settings.fakeoutChance === 0 ? (
+                  <p className="text-sm text-neutral-600" role="status">
+                    {settings.feintCount === 0 ? "Feints are off. Raise the limit to add them."
+                      : settings.directions.length < 2 ? "Choose at least two directions to use feints."
+                      : "Feints are off at 0%. Raise the chance to use them."}
+                  </p>
+                ) : null}
+                <RangeField
+                  id="fake-chance"
+                  disabled={feintsOff}
+                  label="Chance of feints"
+                  min={RANGES.fakeoutChance.min}
+                  max={RANGES.fakeoutChance.max}
+                  value={settings.fakeoutChance}
+                  format={(value) => `${value}%`}
+                  onChange={(fakeoutChance) =>
+                    changeTiming({ ...settings, fakeoutChance })
+                  }
+                />
+                <RangeField
+                  id="fake-ms"
+                  step={10}
+                  disabled={feintsOff || settings.fakeoutChance === 0}
+                  label="Feint flash time"
+                  min={RANGES.fakeoutMs.min}
+                  max={RANGES.fakeoutMs.max}
+                  value={settings.fakeoutMs}
+                  format={secondsLabel}
+                  onChange={(fakeoutMs) => changeTiming({ ...settings, fakeoutMs })}
                 />
               </div>
               <p className="mt-4 text-sm text-neutral-600">
@@ -527,6 +571,10 @@ export function SetupScreen({
                 Arrow &amp; background<span>Make the cue easy to see</span>
               </summary>
               <div className="mt-4 space-y-4">
+                <div className="flex items-center justify-center rounded-xl border border-neutral-200 p-4" style={{ backgroundColor: swatchHex(settings.backgroundColor) }} role="img" aria-label="Arrow colour preview">
+                  <ArrowRight className="size-16" strokeWidth={3} style={{ color: swatchHex(settings.arrowColor) }} />
+                </div>
+                {!readable ? <p className="text-sm font-medium text-red-700" role="status">The arrow is hard to see. Choose colours with more contrast.</p> : null}
                 <SwatchRow
                   label="Arrow"
                   value={settings.arrowColor}

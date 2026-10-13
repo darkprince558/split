@@ -12,6 +12,8 @@ export type StoredClip = {
   mime: string;
   blob: Blob;
   createdAt: number;
+  realCueMs?: number;
+  durationMs?: number;
 };
 
 function openDb() {

@@ -69,6 +69,10 @@ export function readPreferences(raw: string | null): Settings {
     const restored = Object.fromEntries(
       Object.keys(defaults).map((key) => [key, value[key]]),
     ) as Settings;
+    // Match the visible hundredth-second precision and slider increments.
+    for (const key of ["gapMin", "gapMax", "holdMs", "fakeoutMs"] as const) {
+      restored[key] = Math.round(restored[key] / 10) * 10;
+    }
     restored.directions = [...new Set(restored.directions)];
     return startBlockReason(restored) ? defaults : restored;
   } catch {

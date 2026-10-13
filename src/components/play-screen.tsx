@@ -1,5 +1,7 @@
 "use client";
 
+import { ScreenHeading } from "@/components/screen-heading";
+
 import {
   useCallback,
   useEffect,
@@ -10,7 +12,7 @@ import {
 import { CueArrow } from "@/components/cue-arrow";
 import { Button } from "@/components/ui/button";
 import { useDrillSession, type PlannedCue } from "@/hooks/use-drill-session";
-import { CueCamera } from "@/lib/camera";
+import { CueCamera, type CueRecording } from "@/lib/camera";
 import {
   directionLabel,
   inkForBackground,
@@ -28,7 +30,7 @@ const PAD: (Direction | null)[][] = [
   ["forward-left", "forward", "forward-right"],
 ];
 
-const STORAGE_NOTE = "Couldn't save that clip. The drill is still running.";
+const STORAGE_NOTE = "A clip couldn't be saved on this device.";
 const CAMERA_NOTE = "Camera didn't start. This run won't be recorded.";
 
 export type FinishedRun = {
@@ -102,7 +104,7 @@ export function PlayScreen({
       >
         <main className="m-auto flex w-full max-w-md flex-col items-center gap-5 px-6 text-center">
           <Video className="size-9" aria-hidden />
-          <h1 className="text-3xl font-semibold">Allow camera access</h1>
+          <ScreenHeading className="text-3xl font-semibold">Allow camera access</ScreenHeading>
           <p className="text-base opacity-75">
             Use your browser’s camera prompt to record each cue. Video stays on
             this device.
@@ -192,9 +194,9 @@ function ReadyScreen({
       data-screen="play"
       data-phase="ready"
     >
-      <h1 className="text-3xl font-semibold">
+      <ScreenHeading className="text-3xl font-semibold">
         {note ? "Camera unavailable" : "Get ready"}
-      </h1>
+      </ScreenHeading>
       {note ? (
         <p className="max-w-sm text-base" role="status">
           Your camera didn’t start. You can still practise without recording, or
@@ -253,7 +255,7 @@ function LiveDrill({
   onFinish: (run: FinishedRun) => void;
 }) {
   const cueRef = useRef<PlannedCue | null>(null);
-  const recording = useRef(false);
+  const recording = useRef<CueRecording | null>(null);
   const indexRef = useRef(0);
   const savedCount = useRef(0);
   const noteRef = useRef(note);
@@ -267,8 +269,7 @@ function LiveDrill({
       cueRef.current = cue;
       const camera = cameraRef.current;
       if (!cameraOn || !camera?.active) return;
-      recording.current = true;
-      camera.start();
+      recording.current = camera.start();
     },
     [cameraOn, cameraRef],
   );
@@ -276,20 +277,20 @@ function LiveDrill({
   const onCueEnd = useCallback(
     (keep: boolean) => {
       const cue = cueRef.current;
-      if (!recording.current || !cue) return Promise.resolve();
-      recording.current = false;
-      const camera = cameraRef.current;
-      if (!camera) return Promise.resolve();
+      if (!cue || !cameraOn) return Promise.resolve();
+      const capture = recording.current;
+      recording.current = null;
+      // Reserve order before asynchronous tails finish.
+      const clipIndex = keep ? ++indexRef.current : 0;
       return (async () => {
-        const blob = await camera.stop();
+        const result = await capture?.finish(keep);
         if (!keep) return;
-        if (!blob) {
-          noteRef.current = "Couldn't record that cue. The drill is still running.";
+        if (!result) {
+          noteRef.current = "A cue couldn't be recorded.";
           onNote(noteRef.current);
           return;
         }
-        indexRef.current += 1;
-        const clipIndex = indexRef.current;
+        const { blob, realCueMs, durationMs } = result;
         const saved = await saveClip({
           id: crypto.randomUUID(),
           sessionId,
@@ -299,6 +300,8 @@ function LiveDrill({
           mime: blob.type || "video/webm",
           blob,
           createdAt: Date.now(),
+          realCueMs,
+          durationMs,
         });
         if (saved) {
           savedCount.current += 1;
@@ -308,7 +311,7 @@ function LiveDrill({
         onNote(STORAGE_NOTE);
       })();
     },
-    [cameraRef, onNote, sessionId],
+    [cameraOn, onNote, sessionId],
   );
 
   const finish = useCallback(
@@ -329,6 +332,9 @@ function LiveDrill({
     {
       onCueStart,
       onCueEnd,
+      onRealCue: () => recording.current?.markRealCue(),
+      onPause: (paused) => paused ? cameraRef.current?.pause() : cameraRef.current?.resume(),
+      onEnding: () => cameraRef.current?.finishPending(),
     },
   );
 
@@ -345,13 +351,6 @@ function LiveDrill({
     };
   }, []);
 
-  useEffect(() => {
-    const camera = cameraRef.current;
-    if (!camera) return;
-    if (view.paused) camera.pause();
-    else camera.resume();
-  }, [cameraRef, view.paused]);
-
   return (
     <div
       className="fixed inset-0 flex flex-col overflow-hidden select-none"
@@ -367,7 +366,8 @@ function LiveDrill({
       data-background-color={settings.backgroundColor}
       onContextMenu={(event) => event.preventDefault()}
     >
-      <header className="z-10 flex shrink-0 items-center justify-between px-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+      {!view.paused && !view.finishing ? <ScreenHeading className="sr-only">Drill in progress</ScreenHeading> : null}
+      <header className="z-10 flex shrink-0 flex-wrap items-center justify-between px-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <div className="flex items-center">
           <Button
             type="button"
@@ -375,6 +375,7 @@ function LiveDrill({
             className="h-11 bg-transparent px-3 text-base hover:bg-transparent"
             style={{ color: ink }}
             onClick={stop}
+            disabled={view.finishing}
           >
             <Square className="size-4" aria-hidden /> End drill
           </Button>
@@ -384,6 +385,7 @@ function LiveDrill({
             className="h-11 bg-transparent px-3 text-base hover:bg-transparent"
             style={{ color: ink }}
             onClick={togglePause}
+            disabled={view.finishing}
           >
             {view.paused ? (
               <Play className="size-4" aria-hidden />
@@ -415,9 +417,11 @@ function LiveDrill({
       </p>
 
       <div className="flex min-h-0 flex-1 items-center justify-center">
-        {view.paused ? (
-          <div className="flex flex-col items-center gap-5 text-center">
-            <h1 className="text-4xl font-semibold">Paused</h1>
+        {view.finishing ? (
+          <div className="px-6 text-center" role="status"><ScreenHeading className="text-2xl font-semibold">Saving your clips…</ScreenHeading><p className="mt-2 text-base opacity-70">Finishing the last reaction.</p></div>
+        ) : view.paused ? (
+          <div className="flex w-full max-w-md flex-col items-center gap-5 px-6 text-center">
+            <ScreenHeading className="text-4xl font-semibold">Paused</ScreenHeading>
             <p className="text-base opacity-70">
               Take a breather. Resume when you’re ready.
             </p>
@@ -425,6 +429,7 @@ function LiveDrill({
               type="button"
               className="h-14 rounded-2xl px-8 text-lg"
               onClick={togglePause}
+              disabled={view.finishing}
             >
               <Play className="size-5" aria-hidden /> Resume drill
             </Button>
@@ -438,7 +443,9 @@ function LiveDrill({
             announce={view.phase === "live"}
             color={arrow}
           />
-        ) : null}
+        ) : (
+          <p className="px-6 text-center text-lg opacity-60">Return to centre</p>
+        )}
       </div>
 
       {settings.respond ? (
@@ -459,7 +466,7 @@ function LiveDrill({
                   <Button
                     type="button"
                     variant="ghost"
-                    disabled={view.paused}
+                    disabled={view.paused || view.finishing}
                     className="h-16 w-full rounded-none bg-transparent px-1 text-sm leading-tight font-medium whitespace-normal hover:bg-transparent active:opacity-60"
                     style={{ color: ink }}
                     onPointerDown={(event) => {

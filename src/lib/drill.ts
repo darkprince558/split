@@ -62,7 +62,7 @@ export type Feel = {
 };
 
 export const RANGES = {
-  gapMin: { min: 40, max: 4000 },
+  gapMin: { min: 40, max: 6000 },
   gapMax: { min: 40, max: 6000 },
   holdMs: { min: 50, max: 3000 },
   fakeoutChance: { min: 0, max: 100 },
@@ -124,12 +124,20 @@ export type Summary = {
   misses: number;
   feints: number;
   stoppedEarly: boolean;
+  elapsedSeconds: number;
+  difficulty: number;
 };
 
 export type Rng = () => number;
 
 function lerp(start: number, end: number, t: number) {
   return start + (end - start) * t;
+}
+
+// Undo only the controls changed by difficulty; keep other choices intact.
+export function timingSnapshot(settings: Settings) {
+  const { difficulty, gapMin, gapMax, holdMs, fakeoutChance, fakeoutMs, feintCount } = settings;
+  return { difficulty, gapMin, gapMax, holdMs, fakeoutChance, fakeoutMs, feintCount };
 }
 
 export function clampDifficulty(level: number) {
@@ -147,11 +155,11 @@ export function feintCountForLevel(level: number) {
 export function feelForLevel(level: number): Feel {
   const t = (clampDifficulty(level) - 1) / 9;
   return {
-    gapMin: Math.round(lerp(1800, 220, t)),
-    gapMax: Math.round(lerp(3400, 900, t)),
-    holdMs: Math.round(lerp(1400, 450, t)),
+    gapMin: Math.round(lerp(1800, 220, t) / 10) * 10,
+    gapMax: Math.round(lerp(3400, 900, t) / 10) * 10,
+    holdMs: Math.round(lerp(1400, 450, t) / 10) * 10,
     fakeoutChance: Math.round(lerp(5, 55, t)),
-    fakeoutMs: Math.round(lerp(300, 70, t)),
+    fakeoutMs: Math.round(lerp(300, 70, t) / 10) * 10,
     feintCount: feintCountForLevel(level),
     burstChance: lerp(0, 0.48, t),
   };
@@ -520,6 +528,8 @@ export function summarize(input: {
   reps: number;
   respond: boolean;
   stoppedEarly: boolean;
+  elapsedSeconds?: number;
+  difficulty?: number;
 }): Summary {
   if (input.hits.length === 0) {
     return {
@@ -530,6 +540,8 @@ export function summarize(input: {
       misses: input.misses,
       feints: input.feints,
       stoppedEarly: input.stoppedEarly,
+      elapsedSeconds: input.elapsedSeconds ?? 0,
+      difficulty: input.difficulty ?? 1,
     };
   }
 
@@ -542,6 +554,8 @@ export function summarize(input: {
     misses: input.misses,
     feints: input.feints,
     stoppedEarly: input.stoppedEarly,
+      elapsedSeconds: input.elapsedSeconds ?? 0,
+      difficulty: input.difficulty ?? 1,
   };
 }
 
@@ -575,12 +589,12 @@ export function clipFilename(index: number, direction: Direction, feints: Direct
 }
 
 export function clipsCsv(
-  rows: { filename: string; direction: Direction; feints: Direction[] }[],
+  rows: { filename: string; direction: Direction; feints: Direction[]; realCueMs?: number }[],
 ) {
-  const lines = ["clip,real,feints"];
+  const lines = ["clip,real,feints,real_cue_seconds"];
   for (const row of rows) {
     const feints = row.feints.map((direction) => directionLabel(direction)).join("; ");
-    lines.push([row.filename, directionLabel(row.direction), feints].join(","));
+    lines.push([row.filename, directionLabel(row.direction), feints, row.realCueMs === undefined ? "" : (row.realCueMs / 1000).toFixed(3)].join(","));
   }
   return `${lines.join("\n")}\n`;
 }

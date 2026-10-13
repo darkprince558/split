@@ -39,3 +39,19 @@ test("corrupt, outdated and unsafe preferences fall back to usable defaults", ()
     assert.deepEqual(readPreferences(raw), defaults);
   }
 });
+
+
+test("both interval handles can reach six seconds and survive a reload", () => {
+  const settings = { ...createDefaultSettings(), gapMin: 5990, gapMax: 6000 };
+  assert.deepEqual(readPreferences(JSON.stringify({ version: 1, settings })), settings);
+});
+
+
+test("older millisecond timings are aligned with the visible slider precision", () => {
+  const settings = { ...createDefaultSettings(), gapMin: 1098, gapMax: 2289, holdMs: 978, fakeoutMs: 198 };
+  const result = readPreferences(JSON.stringify({ version: 1, settings }));
+  assert.equal(result.gapMin, 1100);
+  assert.equal(result.gapMax, 2290);
+  assert.equal(result.holdMs, 980);
+  assert.equal(result.fakeoutMs, 200);
+});

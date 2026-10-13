@@ -10,6 +10,8 @@ import {
   directionCueWord,
   directionFromKey,
   feelForLevel,
+  feelMatches,
+  timingSnapshot,
   planCue,
   planGap,
   presetForLevel,
@@ -235,5 +237,34 @@ describe("scoring", () => {
     });
     assert.equal(timed.averageMs, 270);
     assert.equal(timed.bestMs, 240);
+  });
+});
+
+
+describe("timing controls", () => {
+  it("recognizes unedited timing at every difficulty, even without a named preset", () => {
+    for (let level = 1; level <= 10; level++) {
+      const settings = applyDifficulty(createDefaultSettings(), level);
+      assert.equal(feelMatches(settings), true);
+      assert.equal(feelMatches({ ...settings, holdMs: settings.holdMs + 10 }), false);
+    }
+  });
+  it("restores only difficulty and timing after other setup choices change", () => {
+    const custom = { ...createDefaultSettings(), gapMin: 1110, holdMs: 840 };
+    const undo = timingSnapshot(custom);
+    const next = { ...applyDifficulty(custom, 10), record: false, mode: "timer" as const };
+    const restored = { ...next, ...undo };
+    assert.equal(restored.holdMs, 840);
+    assert.equal(restored.gapMin, 1110);
+    assert.equal(restored.difficulty, custom.difficulty);
+    assert.equal(restored.record, false);
+    assert.equal(restored.mode, "timer");
+  });
+  it("preserves active duration and difficulty with and without measured answers", () => {
+    for (const hits of [[], [240, 280]]) {
+      const result = summarize({ hits, misses: 0, feints: 0, reps: 2, respond: hits.length > 0, stoppedEarly: true, elapsedSeconds: 12.5, difficulty: 8 });
+      assert.equal(result.elapsedSeconds, 12.5);
+      assert.equal(result.difficulty, 8);
+    }
   });
 });
